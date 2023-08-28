@@ -1,0 +1,1 @@
+message("Test from subdirectory")
