@@ -1,6 +1,9 @@
 #include <iostream>
 #include <vector>
 #include <cmath>
+#include <memory>
+#include <chrono>
+#include <thread>
 
 #include <Eigen/core>
 #include <pcl/pcl_macros.h>
@@ -9,8 +12,12 @@
 #include <pcl/common/transforms.h>
 
 #include "scanner_config.hpp"
+#include "leveler/leveler.hpp"
+#include "leveler/simulated_leveler.hpp"
 
 
+namespace
+{
 struct SystemRawData
 {
     struct Lidar
@@ -32,7 +39,7 @@ public:
 };
 
 
-int main(int argc, char* argv[])
+static void lidarToPointCloudTest()
 {
     // Let lidar reference be at (3, 4), leveler reference be at x=7
     // heightDelta = 4
@@ -86,6 +93,7 @@ int main(int argc, char* argv[])
     objectPoints.width = rotatorCartesian.size();
     objectPoints.height = 1;
     objectPoints.resize(objectPoints.width * objectPoints.height);
+    std::cout << "Listing points in object reference:" << '\n';
     for (std::size_t i = 0; i < objectPoints.size(); i++)
     {
         auto objectR = rotatorCartesian[i].x;
@@ -97,6 +105,29 @@ int main(int argc, char* argv[])
 
         std::cout << objectPoints[i].x << ", " << objectPoints[i].y << ", " << objectPoints[i].z << '\n';
     }
+}
+
+static void levelerInterfaceTest()
+{
+    std::cout << "Polling leveler every 0.1s:" << '\n';
+    std::unique_ptr<Leveler> leveler = std::make_unique<SimulatedLeveler>(-2.0_rad, 3.0_rad / 1.0);
+
+    for (int i = 0; i < 10; i++)
+    {
+        using namespace std::chrono_literals;
+
+        std::cout << leveler->pollAngle() << '\n';
+
+        std::this_thread::sleep_for(0.1s);
+    }
+}
+}
+
+
+int main(int argc, char* argv[])
+{
+    lidarToPointCloudTest();
+    levelerInterfaceTest();
 
     return 0;
 }
