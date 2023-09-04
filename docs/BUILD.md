@@ -2,19 +2,28 @@
 
 ## Prerequisites
 
+This repository utilizes third-party libraries. Please decide on the following options on how to link to those libraries:
+
+- Link to **prebuilt installed binaries**: This method is less resource-intensive when building but requires setup after upgrading libraries.
+- Build from source with **vcpkg**: This method takes a fair amount of time and disk space, particularly in the buildtrees directory.
+
 Please make sure you have the following installed:
 
 - [Git](https://git-scm.com): should be accessible by terminal
 - [CMake](https://cmake.org): should be accessible by terminal
 - [any generator supported by CMake](https://cmake.org/cmake/help/latest/manual/cmake-generators.7.html): see below for information
   - For Windows: MinGW, Visual Studio, or Unix make under WSL are solid choices.
-- [vcpkg](https://vcpkg.io): cloned to a known directory and bootstrap script ran (steps 1 and 2 in https://vcpkg.io/en/getting-started.html)
-
-In addition, building requires a fair amount of time and disk space.
+  - Ninja is possibly useful for supporting cross-platform.
+- one of the following methods to obtain third-party libraries:
+  - all of the following installed binaries:
+    - Point Cloud Library for [Windows (exe installer)](https://github.com/PointCloudLibrary/pcl/releases) or [other platforms](https://pointclouds.org/downloads/)
+      - The Windows installer requires you to add the binary directories to your path. See [this GitHub issue](https://github.com/PointCloudLibrary/pcl/issues/5001#issuecomment-953412362) for guidance.
+      - Other platforms have not been tested for this repo yet.
+  - [vcpkg](https://vcpkg.io): cloned to a known directory and bootstrap script ran (steps 1 and 2 in https://vcpkg.io/en/getting-started.html)
 
 ## 1. Clone the Repo
 
-> **Make sure that the full path of the local directory does not contain any whitespace.** \
+> **If using vcpkg, make sure that the full path of the local directory does not contain any whitespace.** \
 > libiconv is known to fail when trying to build in a path with whitespaces.
 
 Type the following into your terminal:
@@ -46,11 +55,16 @@ After you figured out your generator type, go to the correct section, either [si
 
 ## Single: 2. Configure and Generate
 
-Type the following into your terminal, replacing `<path-to-vcpkg-root>` accordingly:
+Type the following into your terminal:
 
 ```sh
+# If using installed binaries:
+cmake -S . -B build
+# Or `cmake -S . -B build -DCMAKE_BUILD_TYPE=RELEASE` for a release version
+
+# If using vcpkg, replace `<path-to-vcpkg-root>` accordingly:
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg-root>/scripts/buildsystems/vcpkg.cmake
-# Or `cmake -S . -B build -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg-root>/scripts/buildsystems/vcpkg.cmake`
+# Or `cmake -S . -B build -DCMAKE_BUILD_TYPE=RELEASE -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg-root>/scripts/buildsystems/vcpkg.cmake` for a release version
 ```
 
 > Note: You can specify the build directory and CMAKE_BUILD_TYPE (which is typically default to DEBUG).
@@ -70,9 +84,13 @@ Alternatively, you can use your build tool manually, such as `make`.
 
 ## Multi: 2. Configure and Generate
 
-Type the following into your terminal, replacing `<path-to-vcpkg-root>` accordingly:
+Type the following into your terminal:
 
 ```sh
+# If using installed binaries:
+cmake -S . -B build
+
+# If using vcpkg, replace `<path-to-vcpkg-root>` accordingly:
 cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=<path-to-vcpkg-root>/scripts/buildsystems/vcpkg.cmake
 ```
 
