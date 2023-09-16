@@ -5,7 +5,8 @@ set(LEVELER_SOURCES
 
 add_executable(lidar2pc
     lidar_to_point_cloud.cpp
-    ${LEVELER_SOURCES})
+    ${LEVELER_SOURCES}
+    visualizer.cpp)
 target_include_directories(lidar2pc
     PRIVATE ${PCL_INCLUDE_DIRS})
 target_link_libraries(lidar2pc
