@@ -10,6 +10,10 @@ MainWindow::MainWindow(QWidget *parent)
     ui->setupUi(this);
     // Connect the button's clicked() signal to a custom slot
     QObject::connect(ui->startButton, &QPushButton::clicked, this, &MainWindow::executeStartCommand);
+
+    // Assuming your slider object is named ui->horizontalSlider
+    connect(ui->horizontalSlider, &QSlider::valueChanged, this, &MainWindow::on_horizontalSlider_valueChanged);
+
 }
 
 MainWindow::~MainWindow()
@@ -38,7 +42,7 @@ MainWindow::~MainWindow()
 //    qDebug() << "Command Output:" << output;
 //}
 
-// Function for windows specific OS
+// Function for windows specific OS`
 void MainWindow::executeStartCommand()
 {
     // Create a QProcess instance
@@ -65,4 +69,11 @@ void MainWindow::executeStartCommand()
 
 
 
+
+
+void MainWindow::on_horizontalSlider_valueChanged(int value)
+{
+    qDebug() << "Slider Value Changed:" << value;
+    ui->label->setText(QString("Selected Value: %1").arg(value));
+}
 

@@ -18,6 +18,9 @@ public:
 public slots:
     void executeStartCommand();
 
+private slots:
+    void on_horizontalSlider_valueChanged(int value);
+
 private:
     Ui::MainWindow *ui;
 };
