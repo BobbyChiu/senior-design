@@ -1,0 +1,3 @@
+[submodule "extern/rplidar_sdk"]
+	path = extern/rplidar_sdk
+	url = https://github.com/dxie25/rplidar_sdk_cmake.git
