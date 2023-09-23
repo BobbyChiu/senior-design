@@ -1,3 +1,3 @@
-add_subdirectory(lidar-scanner)
+add_subdirectory(das)
 add_subdirectory(pc-processor)
 add_subdirectory(gui)
