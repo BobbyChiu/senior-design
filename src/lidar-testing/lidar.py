@@ -4,53 +4,172 @@ import queue
 from datetime import datetime
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
-from random import randrange
 import threading
 import time
-import math
+import plotly
+import plotly.graph_objs as go
 
-lidarData = queue.Queue()
-lidar = RPLidar('com5')
-fig, ax = plt.subplots()
-sc = ax.scatter([], [])
-ax.set_xlim([-10, 10])
-ax.set_ylim([-10, 10])
-
-def pol2cart(rho, phi):
-    x = rho * np.cos(np.radians(phi))
-    y = rho * np.sin(np.radians(phi))
+# converts 2d polar (in degrees) to 2d cartesian
+def pol2cart(radius, angle):
+    x = radius * np.cos(np.radians(angle))
+    y = radius * np.sin(np.radians(angle))
     return(x, y)
 
-# def connectLidar(port):
-#     info = lidar.get_info()
-#     print(info)
-#     health = lidar.get_health()
-#     print(health)
-#     return lidar
+# takes as input 2d lidar_scan and outputs x, y for 360 degree top-down view
+def plot_data_cart(lidar_scan):
+    dist = lidar_scan[:, 0]
+    angle = lidar_scan[:, 1]
 
-def producerThread():
+    return pol2cart(dist, angle)
+
+# takes as input 2d lidar_scan and outputs x, y for top-down view
+def plot_data_vert_slice(lidar_scan):
+    x, y = plot_data_cart(lidar_scan)
+    return (y, x)
+
+def lidar_filter_scan(data, max_dist, min_angle, max_angle):
+    data = data[data[:, 0] < max_dist]
+    data = data[data[:, 1] > min_angle]
+    data = data[data[:, 1] < max_angle]
+    return data  
+
+# convert lidar scan data (dist, angle from z axis, time) to x, y, z
+# angular speed in degrees per second
+def lidar_to_3d(scan, angular_speed=20, dist_from_axis=3):
+    # convert lidar dist, lidar angle to x, y in lidar plane
+    lidar_dist = scan[:, 0]
+    lidar_angle = scan[:, 1]
+    print(lidar_angle)
+    lidar_scan_time = scan[:, 2]
+    
+    y, x = pol2cart(lidar_dist, lidar_angle)
+
+    # shift coordinate space so that (0, 0) is on the axis of rotation
+    r = dist_from_axis - x
+    theta = -angular_speed * lidar_scan_time
+    z = y
+
+    # convert cylindrical coordinates to cartesian
+    x, y = pol2cart(r, theta)
+
+    return (x, y, z)
+
+# plot 3d points
+def plot3d(x, y, z):
+    trace = go.Scatter3d(x=x,y=y,z=z,
+        mode='markers',
+        marker={
+            'size': 10,
+            'opacity': 0.8,
+        }
+    )
+    # Configure the layout.
+    layout = go.Layout(
+        margin={'l': 0, 'r': 0, 'b': 0, 't': 0}
+    )
+    data = [trace]
+    plot_figure = go.Figure(data=data, layout=layout)
+    plot_figure.update_scenes(aspectmode='data')
+    # Render the plot
+    plotly.offline.iplot(plot_figure)
+
+def producerThread(lidar, lidar_plot_queue, lidar_cumulative_scan, should_filter=True):
+    start_time = time.time()
     for i, scan in enumerate(lidar.iter_scans()):
-        print('%d: Got %d measurments' % (i, len(scan)))
-        if lidarData.empty():
-            lidarData.put(scan)
+        # add data to plotting queue
+        scan = np.array(scan)
+        scan = scan[:, [2, 1]] # get data as [dist, angle]
+        scan[:, 0] = scan[:, 0]/100 
+        if should_filter:
+            scan = lidar_filter_scan(scan, max_dist=4, min_angle=30, max_angle=150)
 
-def consumerThread(frame):
+        lidar_plot_queue.put(scan)
+
+        # update cumulative scanning data
+        scan_time = time.time() - start_time
+        print(scan_time)
+        if scan_time > 10 and lidar_cumulative_scan != None:
+            scan_with_time = np.column_stack((scan, np.full(scan[:,0].shape, scan_time - 10))) # add third coordinate: time
+            lidar_cumulative_scan[0] = np.vstack((lidar_cumulative_scan[0], scan_with_time))
+    
+def consumerThread(frame, sc, lidar_queue, preprocessor):
     try:
-        data = np.array(lidarData.get_nowait())
-        dist = data[:, 2]
-        angle = data[:, 1]
-
-        x, y = pol2cart(dist, angle)
-
-        sc.set_offsets(list(zip(x/200, y/200)))
-        # Set sizes...
-        return sc
-    except Exception:
+        lidar_scan = lidar_queue.get_nowait()
+        x, y = preprocessor(lidar_scan)
+        
+        sc.set_offsets(list(zip(x, y)))
+    except Exception as e:
+        raise(e)
+    finally:
         return sc
 
-producer = threading.Thread(target=producerThread, daemon=True)
-producer.start()
+# for plot_type_2d can use either 'vertical_slice' or 'top_down'
+def do_lidar(save_data=False, show_3d_plot=False, view=plot_data_vert_slice):
+    lidar = RPLidar('com3')
+    
+    if not save_data and not show_3d_plot:
+        output_buffer = None
+    else:
+        output_buffer = [np.empty((0, 3))]
 
-ani = FuncAnimation(fig, consumerThread, interval=200)
+    # plot
+    fig, ax = plt.subplots()
+    sc = ax.scatter([], [])
+    lidar_plotting_queue = queue.Queue() # queue for plotting
 
-plt.show()
+    # set axis limits
+    if view == 'top_down':
+        plot_preprocessor = plot_data_cart
+        should_filter = False
+        ax.set_xlim([-10, 10])
+        ax.set_ylim([-10, 10]) 
+    elif view == 'vertical_slice':
+        plot_preprocessor = plot_data_vert_slice
+        should_filter = True
+        ax.set_xlim([0, 4])
+        ax.set_ylim([-2, 2])
+    else:
+        raise("Invalid view: acceptable values are 'vertical_slice', 'top_down'")
+    
+    # start producer thread
+    producer = threading.Thread(target=producerThread, 
+                                args=(lidar, 
+                                      lidar_plotting_queue, 
+                                      output_buffer, 
+                                      should_filter), daemon=True)
+    producer.start()
+
+    # start consumer thread
+    ani = FuncAnimation(fig, 
+                        consumerThread, 
+                        fargs=(sc, lidar_plotting_queue, plot_preprocessor),
+                        interval=100)
+    plt.show() # loops until q is pressed
+
+    # when consumer thread dies...
+    # stop lidar
+    lidar.stop()
+    lidar.stop_motor()
+    lidar.disconnect()
+
+    # # save lidar scan
+    if save_data:
+        filename = "lidar-data/" + datetime.now().strftime("%Y%m%d_%H%M%S") + ".csv"
+        np.savetxt(filename, output_buffer[0], delimiter=",", fmt="%f")
+
+    #plot all scanned points
+    # lidar_cumulative_scan = [np.empty((0, 3))] # all lidar data collected so far
+    # lidar_cumulative_scan[0] = np.loadtxt('lidar-data/20230924_145028.csv', delimiter=",")
+    if show_3d_plot:
+        x, y, z = lidar_to_3d(output_buffer[0])
+        plot3d(x, y, z)
+
+
+if __name__ == '__main__':
+    # do_lidar(save_data=True, show_3d_plot=True, view='vertical_slice')
+
+    # show_3d_plot from file
+    lidar_cumulative_scan = [np.empty((0, 3))] # all lidar data collected so far
+    lidar_cumulative_scan[0] = np.loadtxt('lidar-data/george.csv', delimiter=",")
+    x, y, z = lidar_to_3d(lidar_cumulative_scan[0], angular_speed=20, dist_from_axis=3.5)
+    plot3d(x, y, z)
