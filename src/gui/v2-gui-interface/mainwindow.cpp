@@ -14,6 +14,10 @@ MainWindow::MainWindow(QWidget *parent)
     // Assuming your slider object is named ui->horizontalSlider
     connect(ui->horizontalSlider, &QSlider::valueChanged, this, &MainWindow::on_horizontalSlider_valueChanged);
 
+    // Connect the button's clicked() signal to the openNotepad() slot
+    connect(ui->openNotepadButton, &QPushButton::clicked, this, &MainWindow::on_openNotepadButton_clicked);
+
+
 }
 
 MainWindow::~MainWindow()
@@ -75,5 +79,41 @@ void MainWindow::on_horizontalSlider_valueChanged(int value)
 {
     qDebug() << "Slider Value Changed:" << value;
     ui->label->setText(QString("Selected Value: %1").arg(value));
+}
+
+//void MainWindow::openNotepad()
+//{
+//    // Create a QProcess instance
+//    QProcess process;
+
+//    // Set the command to run (Notepad on Windows)
+//#ifdef Q_OS_WIN
+//    process.start("notepad.exe");
+//#endif
+
+//    // You can add platform-specific commands for other operating systems here
+//    // For example, on Linux/Unix systems, you can use "gedit" or "nano" instead of "notepad.exe"
+
+//    // Wait for the process to finish (optional)
+//    process.waitForFinished();
+//}
+
+
+
+void MainWindow::on_openNotepadButton_clicked()
+{
+    // Create a QProcess instance
+    QProcess process;
+
+// Set the command to run (Notepad on Windows)
+#ifdef Q_OS_WIN
+    process.start("notepad.exe");
+#endif
+
+    // You can add platform-specific commands for other operating systems here
+    // For example, on Linux/Unix systems, you can use "gedit" or "nano" instead of "notepad.exe"
+
+    // Wait for the process to finish (optional)
+    process.waitForFinished();
 }
 
