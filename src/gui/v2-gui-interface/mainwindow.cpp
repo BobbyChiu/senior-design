@@ -64,6 +64,7 @@ void MainWindow::executeStartCommand()
             qDebug() << "No output from the command.";
         } else {
             qDebug() << "Command Output:\n" << output;
+            ui->sysCallOutput->setText(QString("System Call Output (Will be replaced once output is determined): %1").arg(output));
         }
     } else {
         // Handle command execution error
@@ -78,25 +79,8 @@ void MainWindow::executeStartCommand()
 void MainWindow::on_horizontalSlider_valueChanged(int value)
 {
     qDebug() << "Slider Value Changed:" << value;
-    ui->label->setText(QString("Selected Value: %1").arg(value));
+    ui->label->setText(QString("Selected Number of Scans: %1").arg(value));
 }
-
-//void MainWindow::openNotepad()
-//{
-//    // Create a QProcess instance
-//    QProcess process;
-
-//    // Set the command to run (Notepad on Windows)
-//#ifdef Q_OS_WIN
-//    process.start("notepad.exe");
-//#endif
-
-//    // You can add platform-specific commands for other operating systems here
-//    // For example, on Linux/Unix systems, you can use "gedit" or "nano" instead of "notepad.exe"
-
-//    // Wait for the process to finish (optional)
-//    process.waitForFinished();
-//}
 
 
 
@@ -107,13 +91,36 @@ void MainWindow::on_openNotepadButton_clicked()
 
 // Set the command to run (Notepad on Windows)
 #ifdef Q_OS_WIN
-    process.start("notepad.exe");
+    //process.start("notepad.exe");
+    process.start("calc.exe");
+    //process.start("explorer.exe", { "/select,", QDir::toNativeSeparators(QDir::homePath()) });
 #endif
 
     // You can add platform-specific commands for other operating systems here
     // For example, on Linux/Unix systems, you can use "gedit" or "nano" instead of "notepad.exe"
 
-    // Wait for the process to finish (optional)
+    // Wait for the process to finish (optional) Adding two waitForFinished prevent two instances from launching
     process.waitForFinished();
+
 }
+
+//void MainWindow::on_openNotepadButton_pressed() // TODO: Bring up with Daniel
+//{
+//    // Create a QProcess instance
+//    QProcess process;
+
+//// Set the command to run (Notepad on Windows)
+//#ifdef Q_OS_WIN
+//    //process.start("notepad.exe");
+//    process.start("calc.exe");
+//    process.waitForFinished();
+//    //process.start("explorer.exe", { "/select,", QDir::toNativeSeparators(QDir::homePath()) });
+//#endif
+
+//    // You can add platform-specific commands for other operating systems here
+//    // For example, on Linux/Unix systems, you can use "gedit" or "nano" instead of "notepad.exe"
+
+//    // Wait for the process to finish (optional) Adding two waitForFinished prevent two instances from launching
+//    process.waitForFinished();
+//}
 

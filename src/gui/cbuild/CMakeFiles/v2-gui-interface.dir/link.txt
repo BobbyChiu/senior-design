@@ -1,0 +1,3 @@
+"C:\Program Files\CMake\bin\cmake.exe" -E rm -f CMakeFiles\v2-gui-interface.dir/objects.a
+C:\mingw64\bin\ar.exe qc CMakeFiles\v2-gui-interface.dir/objects.a @CMakeFiles\v2-gui-interface.dir\objects1.rsp
+C:\mingw64\bin\c++.exe -mwindows -Wl,--whole-archive CMakeFiles\v2-gui-interface.dir/objects.a -Wl,--no-whole-archive -o v2-gui-interface.exe -Wl,--out-implib,libv2-gui-interface.dll.a -Wl,--major-image-version,0,--minor-image-version,0 @CMakeFiles\v2-gui-interface.dir\linkLibs.rsp

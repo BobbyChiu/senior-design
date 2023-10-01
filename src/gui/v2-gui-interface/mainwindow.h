@@ -23,6 +23,8 @@ private slots:
 
     void on_openNotepadButton_clicked();
 
+    //void on_openNotepadButton_pressed(); // TODO: Bring up to Daniel
+
 private:
     Ui::MainWindow *ui;
 };

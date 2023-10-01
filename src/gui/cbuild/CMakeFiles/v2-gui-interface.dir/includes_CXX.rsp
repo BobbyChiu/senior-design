@@ -1,0 +1,1 @@
+-I"C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/v2-gui-interface_autogen/include" -isystem C:/Qt/6.5.2/mingw_64/include/QtCore -isystem C:/Qt/6.5.2/mingw_64/include -isystem "C:/Qt/6.5.2/mingw_64/mkspecs/win32-g++" -isystem C:/Qt/6.5.2/mingw_64/include/QtWidgets -isystem C:/Qt/6.5.2/mingw_64/include/QtGui
