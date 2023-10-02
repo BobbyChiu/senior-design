@@ -69,13 +69,13 @@ static pcl::PointCloud<pcl::PointXYZ>::Ptr lidarToPointCloudTest()
     constexpr auto SECTOR_COUNT = 40;
     for (std::size_t i = 0; i < SECTOR_COUNT; i++)
     {
-        constexpr auto START_ANGLE = -45.0_deg;
-        constexpr auto END_ANGLE = 60.0_deg;
+        constexpr auto START_ANGLE = DEG2RAD(-45.0);
+        constexpr auto END_ANGLE = DEG2RAD(60.0);
         constexpr auto DELTA_ANGLE = 4.319E-2;
 
         for (auto angle = START_ANGLE; angle < END_ANGLE; angle += DELTA_ANGLE)
         {
-            systemRawData.emplace_back(3000.0_mm, angle, i * 2 * M_PI / SECTOR_COUNT);
+            systemRawData.emplace_back(3000.0, angle, i * 2 * M_PI / SECTOR_COUNT);
         }
     }
 
@@ -123,7 +123,7 @@ static pcl::PointCloud<pcl::PointXYZ>::Ptr lidarToPointCloudTest()
 static void levelerInterfaceTest()
 {
     std::cout << "Polling leveler every 0.1s:" << '\n';
-    std::unique_ptr<Leveler> leveler = std::make_unique<SimulatedLeveler>(-2.0_rad, 3.0_rad / 1.0);
+    std::unique_ptr<Leveler> leveler = std::make_unique<SimulatedLeveler>(-2.0, 3.0 / 1.0);
 
     for (int i = 0; i < 10; i++)
     {

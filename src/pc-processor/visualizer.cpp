@@ -38,5 +38,9 @@ void viz::Visualizer::setCamera(std::array<double, 3> lookAt, std::array<double,
 	std::copy(pos.cbegin(), pos.cend(), std::begin(camera.pos));
 	std::copy(up.cbegin(), up.cend(), std::begin(camera.view));
 
+	// Set clipping planes
+	camera.clip[0] = 0.01; // Close
+	camera.clip[1] = 100000.0; // Far
+
 	viewer.setCameraParameters(camera);
 }
