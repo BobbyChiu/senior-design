@@ -224,11 +224,14 @@ if __name__ == "__main__":
     plotter = pv.Plotter()
     # Add the mesh to plotter
     mesh = mesh.extract_geometry()
+    # smooth the data
+    mesh = mesh.smooth(n_iter=100)
     # show scalar bar with z position coloring
     plotter.add_mesh(
         mesh,
-        scalars=mesh.points[:, 2],
+        color="tan",
+        # scalars=mesh.points[:, 2],
         show_edges=True,
-        scalar_bar_args={"title": "Z Position"},
+        # scalar_bar_args={"title": "Z Position"},
     )
     plotter.show()
