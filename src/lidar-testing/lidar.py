@@ -35,11 +35,10 @@ def lidar_filter_scan(data, max_dist, min_angle, max_angle):
 
 # convert lidar scan data (dist, angle from z axis, time) to x, y, z
 # angular speed in degrees per second
-def lidar_to_3d(scan, angular_speed=20, dist_from_axis=3):
+def lidar_to_3d(scan, angular_speed=30, dist_from_axis=30):
     # convert lidar dist, lidar angle to x, y in lidar plane
     lidar_dist = scan[:, 0]
     lidar_angle = scan[:, 1]
-    print(lidar_angle)
     lidar_scan_time = scan[:, 2]
     
     y, x = pol2cart(lidar_dist, lidar_angle)
@@ -59,7 +58,7 @@ def plot3d(x, y, z):
     trace = go.Scatter3d(x=x,y=y,z=z,
         mode='markers',
         marker={
-            'size': 10,
+            'size': 5,
             'opacity': 0.8,
         }
     )
@@ -79,9 +78,9 @@ def producerThread(lidar, lidar_plot_queue, lidar_cumulative_scan, should_filter
         # add data to plotting queue
         scan = np.array(scan)
         scan = scan[:, [2, 1]] # get data as [dist, angle]
-        scan[:, 0] = scan[:, 0]/100 
+        scan[:, 0] = scan[:, 0]/10
         if should_filter:
-            scan = lidar_filter_scan(scan, max_dist=4, min_angle=30, max_angle=150)
+            scan = lidar_filter_scan(scan, max_dist=60, min_angle=30, max_angle=150)
 
         lidar_plot_queue.put(scan)
 
@@ -105,7 +104,7 @@ def consumerThread(frame, sc, lidar_queue, preprocessor):
 
 # for plot_type_2d can use either 'vertical_slice' or 'top_down'
 def do_lidar(save_data=False, show_3d_plot=False, view=plot_data_vert_slice):
-    lidar = RPLidar('com3')
+    lidar = RPLidar('com5')
     
     if not save_data and not show_3d_plot:
         output_buffer = None
@@ -121,13 +120,13 @@ def do_lidar(save_data=False, show_3d_plot=False, view=plot_data_vert_slice):
     if view == 'top_down':
         plot_preprocessor = plot_data_cart
         should_filter = False
-        ax.set_xlim([-10, 10])
-        ax.set_ylim([-10, 10]) 
+        ax.set_xlim([-100, 100])
+        ax.set_ylim([-100, 100]) 
     elif view == 'vertical_slice':
         plot_preprocessor = plot_data_vert_slice
         should_filter = True
-        ax.set_xlim([0, 4])
-        ax.set_ylim([-2, 2])
+        ax.set_xlim([0, 50])
+        ax.set_ylim([-25, 25])
     else:
         raise("Invalid view: acceptable values are 'vertical_slice', 'top_down'")
     
@@ -168,8 +167,25 @@ def do_lidar(save_data=False, show_3d_plot=False, view=plot_data_vert_slice):
 if __name__ == '__main__':
     # do_lidar(save_data=True, show_3d_plot=True, view='vertical_slice')
 
-    # show_3d_plot from file
+    # # show_3d_plot from 2d data file
     lidar_cumulative_scan = [np.empty((0, 3))] # all lidar data collected so far
-    lidar_cumulative_scan[0] = np.loadtxt('lidar-data/george.csv', delimiter=",")
-    x, y, z = lidar_to_3d(lidar_cumulative_scan[0], angular_speed=20, dist_from_axis=3.5)
+    lidar_cumulative_scan[0] = np.loadtxt('lidar-data/cube.csv', delimiter=",")
+    x, y, z = lidar_to_3d(lidar_cumulative_scan[0], angular_speed=30, dist_from_axis=27)
     plot3d(x, y, z)
+
+    # # # show 3d plot from 3d data file
+    # lidar_cumulative_scan = [np.empty((0, 3))] # all lidar data collected so far
+    # lidar_cumulative_scan[0] = np.loadtxt('../puflow/input/george.xyz')
+    # x, y, z = lidar_cumulative_scan[0][:,0],  lidar_cumulative_scan[0][:,1],  lidar_cumulative_scan[0][:,2]
+    # plot3d(x, y, z)
+
+    # # # show 3d plot from 3d data file
+    # lidar_cumulative_scan = [np.empty((0, 3))] # all lidar data collected so far
+    # lidar_cumulative_scan[0] = np.loadtxt('../puflow/output/george.xyz')
+    # x, y, z = lidar_cumulative_scan[0][:,0],  lidar_cumulative_scan[0][:,1],  lidar_cumulative_scan[0][:,2]
+    # plot3d(x, y, z)
+
+    # # # convert 2d data file to 3d data file
+    # lidar_cumulative_scan[0] = np.loadtxt('lidar-data/george.csv', delimiter=",")
+    # x, y, z = lidar_to_3d(lidar_cumulative_scan[0], angular_speed=20, dist_from_axis=3.5)
+    # np.savetxt('lidar-data/george.xyz', np.column_stack((x * 10, y * 10, z * 10)), fmt="%f")
