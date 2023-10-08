@@ -1,2 +1,3 @@
 rplidar-roboticia
 plotly
+pyvista
