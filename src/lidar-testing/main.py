@@ -1,5 +1,5 @@
 import PointCloud
-from Lidar import Lidar
+from Lidar import Lidar, estimate_angular_speed
 from Visualization import plot3d
 
 import time
@@ -34,23 +34,33 @@ if __name__ == '__main__':
     # x, y, z = lidar_to_3d(lidar_cumulative_scan[0], angular_speed=33.5, dist_from_axis=31.5)
     # np.savetxt('lidar-data/cube.xyz', np.column_stack((x, y, z)), fmt="%f")
 
-    lidar = Lidar('com3', dist_lim=(0,60), angle_lim=(30,150), angular_speed=30, dist_from_axis=30)
+    # lidar = Lidar('com3', dist_lim=(0,60), angle_lim=(30,150), angular_speed=30, dist_from_axis=30)
 
-    def new_main():
-        print("5 Seconds till calibration. Remove any objects on turntable.")
-        time.sleep(5)
-        lidar.calibrate(5)
-        print("5 Seconds till scanning. Place object on turntable.")
-        time.sleep(5)
-        lidar.startScan()
-        print("Scanning for 10 seconds")
-        time.sleep(10)
-        lidar.stopScan()
-        pc = lidar.get3DPointCloud()
-        plot3d(pc)
-        lidar.disconnect()
+    # def new_main():
+    #     print("5 Seconds till calibration. Remove any objects on turntable.")
+    #     time.sleep(5)
+    #     lidar.calibrate(5)
+    #     print("5 Seconds till scanning. Place object on turntable.")
+    #     time.sleep(5)
+    #     lidar.startScan()
+    #     print("Scanning for 40 seconds")
+    #     time.sleep(40)
+    #     lidar.stopScan()
+    #     lidar.remove_background()
+    #     pc = lidar.get3DPointCloud()
+    #     plot3d(pc)
+    #     # save to file
+    #     PointCloud.to_file(pc, folder="lidar-data-xyz")
+    #     PointCloud.to_file(lidar.curr_scan, folder="lidar-data-2d")
 
-    lidar.showPlot(new_main)
+    # lidar.showPlot(new_main)
+    # estimate_angular_speed(lidar.curr_scan[:,0], lidar.curr_scan[:, 2], show_plot=True)
+
+    pc = PointCloud.from_file("lidar-data-xyz/20231009_124200.xyz")
+    scan = PointCloud.from_file("lidar-data-2d/20231009_124200.xyz")
+    plot3d(pc)
+    estimate_angular_speed(scan[:,0], scan[:, 2], show_plot=True)
+
 
     # # mesh
     # points = np.loadtxt('../puflow/output/george.xyz')
