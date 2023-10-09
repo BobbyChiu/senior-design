@@ -92,7 +92,8 @@ void MainWindow::on_openNotepadButton_clicked()
 // Set the command to run (Notepad on Windows)
 #ifdef Q_OS_WIN
     //process.start("notepad.exe");
-    process.start("calc.exe");
+
+    process.start(".\\..\\v2-gui-interface\\lidar2pc.exe"); // TODO: May need to change path. The mainWindow application is located at \senior-design\src\gui\build-v2-gui-interface-Replacement_for_Desktop_Qt_6_5_2_MinGW_64_bit-Debug
     //process.start("explorer.exe", { "/select,", QDir::toNativeSeparators(QDir::homePath()) });
 #endif
 
