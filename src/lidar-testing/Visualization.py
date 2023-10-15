@@ -3,6 +3,9 @@ import plotly.graph_objs as go
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 import threading
+import pyvista as pv
+import open3d as o3d
+import numpy as np
 
 # plot 3d points
 def plot3d(points_3d):
@@ -55,3 +58,5 @@ def plot2d_realtime(buffer_xy, type='vertical_slice', interval=100, xlim=(0, 50)
     if callback != None:
         callback()
     
+def showMesh(mesh):
+    o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True, mesh_show_back_face=True)

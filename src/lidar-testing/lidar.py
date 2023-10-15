@@ -7,21 +7,6 @@ import Visualization
 import PointCloud
 from matplotlib import pyplot as plt
 
-# converts 2d polar (in degrees) to 2d cartesian
-def pol2cart(radius, angle):
-    x = radius * np.cos(np.radians(angle))
-    y = radius * np.sin(np.radians(angle))
-    return(x, y)
-
-def cart2pol(x, y):
-    r = np.sqrt(np.square(x) + np.square(y))
-    theta = np.degrees(np.arctan2(y, x))
-    return r, theta
-
-def cylindrical2cart(r, theta, z):
-    x, y = pol2cart(r, theta)
-    return (x, y, z)
-
 # convert lidar scan data (dist, angle from z axis, time) to x, y, z
 # angular speed in degrees per second
 def lidar2d_to_3d(scan, angular_speed=30, dist_from_axis=30):
@@ -30,17 +15,17 @@ def lidar2d_to_3d(scan, angular_speed=30, dist_from_axis=30):
     lidar_angle = scan[:, 1]
     t = scan[:, 2]
     
-    y, x = pol2cart(lidar_dist, lidar_angle)
+    y, x = PointCloud.pol2cart(lidar_dist, lidar_angle)
 
     # shift coordinate space so that (0, 0) is on the axis of rotation
     r = dist_from_axis - x
     theta = -angular_speed * t
     z = y
 
-    return cylindrical2cart(r, theta, z)
+    return PointCloud.cylindrical2cart(r, theta, z)
 
 # perform dft to estimate angular speed of turntable
-def estimate_angular_speed(dist, time, show_plot=False):
+def estimate_angular_speed(dist, time, range=(25, 45), show_plot=False):
 # get the average dist for each unique time point
     unique_times = np.unique(time)
     averages = []
@@ -69,11 +54,15 @@ def estimate_angular_speed(dist, time, show_plot=False):
         plt.ylabel('Magnitude')
         plt.show()
 
+
+    # get indices in range frequency min and frequency max
+    freq_idx = ((freqs * 360) > 25) & ((freqs * 360) < 45)
+
     # Find the index of the maximum DFT magnitude:
-    max_magnitude_idx = np.argmax(np.abs(dft_result))
+    max_magnitude_idx = np.argmax(np.abs(dft_result[freq_idx]))
 
     # Get the frequency corresponding to the maximum DFT magnitude:
-    max_magnitude_freq = np.abs(freqs[max_magnitude_idx])
+    max_magnitude_freq = np.abs(freqs[freq_idx][max_magnitude_idx])
 
     # get the weighted average of all frequencies
     # weighted_sum = np.sum(np.abs(freqs) * np.abs(dft_result))
@@ -99,6 +88,7 @@ class Lidar():
         self.max_ang = angle_lim[1]
         self.angular_speed = angular_speed
         self.dist_from_axis = dist_from_axis
+        self.turntable_height = 0
         self.start_scan_time = None
         self.background_points = np.array([])
 
@@ -113,7 +103,7 @@ class Lidar():
                 scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
 
                 if self.plotting:
-                    x, y = pol2cart(scan[:,0], scan[:, 1])
+                    x, y = PointCloud.pol2cart(scan[:,0], scan[:, 1])
                     self.plotting_buffer.put(np.column_stack((y, x)))
 
                 # update cumulative scanning data
@@ -136,7 +126,7 @@ class Lidar():
 
         lidar_dist = self.curr_scan[:, 0]
         lidar_angle = self.curr_scan[:, 1]
-        y, x = pol2cart(lidar_dist, lidar_angle)
+        y, x = PointCloud.pol2cart(lidar_dist, lidar_angle)
 
         # get background points to filter out later
         self.background_points = np.column_stack((x,y))
@@ -144,12 +134,14 @@ class Lidar():
         print(x)
 
         # estimate distance from axis of rotation
-        mask = PointCloud.filter(np.column_stack((x, np.full(x.shape, 0))), 5, 0.01) # get points that form veritcal line
+        mask = PointCloud.knn_filter(np.column_stack((x, np.full(x.shape, 0))), 5, 0.01) # get points that form veritcal line
+        self.turntable_height = y[mask[:, 0]].max()
 
         print(mask)
 
         self.dist_from_axis = np.median(x[mask[:, 0]]) + self.TURNTABLE_RADIUS
         print(f"Estimated dist from axis: {self.dist_from_axis}")
+        print(f"Turntable Height: {self.turntable_height}")
 
         print("DONE CALIBRATION")
 
@@ -159,11 +151,12 @@ class Lidar():
         lidar_angle = self.curr_scan[:, 1]
         t = self.curr_scan[:, 2]
         
-        y, x = pol2cart(lidar_dist, lidar_angle)
+        y, x = PointCloud.pol2cart(lidar_dist, lidar_angle)
         
         # remove background points
         if self.background_points.size > 0:
             mask = PointCloud.subtract_point_clouds(np.column_stack((x, y)), self.background_points, 0.25)
+            mask = mask & (y > self.turntable_height)
             lidar_dist = lidar_dist[mask]
             lidar_angle = lidar_angle[mask]
             t = t[mask]
@@ -195,15 +188,15 @@ class Lidar():
     def stopScan(self):
         self.scanning = False
 
-    def get3DPointCloud(self):
+    def get3DPointCloud(self, scan=None):
+
+        if scan is None:
+            scan = self.curr_scan
+
         # estimate angular speed
-        self.angular_speed = estimate_angular_speed(self.curr_scan[:,0], self.curr_scan[:, 2])
+        self.angular_speed = estimate_angular_speed(scan[:,0], scan[:, 2])
 
-        result = np.column_stack(lidar2d_to_3d(self.curr_scan, self.angular_speed, self.dist_from_axis))
-
-        # filter outliers
-        # mask = PointCloud.filter(result, 3, 1)
-        # print(mask)
+        result = np.column_stack(lidar2d_to_3d(scan, self.angular_speed, self.dist_from_axis))
 
         return result
         
