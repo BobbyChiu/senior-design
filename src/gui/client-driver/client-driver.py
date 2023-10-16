@@ -5,13 +5,6 @@ from enum import Enum
 HOST = 'localhost'
 PORT = 12369
 
-class MessageEnum(Enum):
-    CALIBRATE = b'calibrate'
-    SCAN = b'scan'
-    PROCESS = b'process'
-    GENERATE = b'generate'
-    DONE = b'done'
-
 
 def blocking_driver() -> None:
     addr = (HOST, PORT)
@@ -19,19 +12,19 @@ def blocking_driver() -> None:
     with socket.create_connection(address=addr) as s:
         print('Connected.')
 
-        s.sendall(MessageEnum.CALIBRATE)
+        s.sendall(b'calibrate')
         print('Calibrating.')
 
-        s.sendall(MessageEnum.SCAN)
+        s.sendall(b'scan')
         print('Scanning.')
 
-        s.sendall(MessageEnum.PROCESS)
+        s.sendall(b'process')
         print('Processing.')
 
-        s.sendall(MessageEnum.GENERATE)
+        s.sendall(b'generate')
         print('Generating.')
 
-        s.sendall(MessageEnum.DONE)
+        s.sendall(b'done')
         print('Done.')
 
 
