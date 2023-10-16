@@ -1,5 +1,5 @@
 #include "lidar_processor.hpp"
-#include "visualizer.hpp"
+#include "visualizer/visualizer.hpp"
 
 
 int main(int argc, char* argv[])

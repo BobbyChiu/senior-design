@@ -20,7 +20,7 @@ public:
 	void doLoop();
 
 	// Add an XYZ point cloud to the visualizer
-	void addPointCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::string& id = "");
+	void addPointCloud(const pcl::PointCloud<pcl::PointXYZ>::Ptr cloud, const std::string& id = "", const std::string &color = "hash");
 
 	/// <summary>
 	/// Set fundamental camera parameters
