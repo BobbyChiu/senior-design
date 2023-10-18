@@ -130,14 +130,10 @@ class Lidar():
 
         # get background points to filter out later
         self.background_points = np.column_stack((x,y))
-        
-        print(x)
 
         # estimate distance from axis of rotation
         mask = PointCloud.knn_filter(np.column_stack((x, np.full(x.shape, 0))), 5, 0.01) # get points that form veritcal line
         self.turntable_height = y[mask[:, 0]].max()
-
-        print(mask)
 
         self.dist_from_axis = np.median(x[mask[:, 0]]) + self.TURNTABLE_RADIUS
         print(f"Estimated dist from axis: {self.dist_from_axis}")

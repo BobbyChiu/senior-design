@@ -116,12 +116,12 @@ def fillFace(pc, bottom=False, top=False):
         for t in unique_theta:
             indices = np.where(theta == t)
             curr_min_z = np.max(z[indices])
-            if np.abs(curr_min_z - max_z) > 0.1:
+            if np.abs(curr_min_z - min_z) > 0.4:
                 continue
             min_idx = np.argmin(z[indices])
             target_r = r[indices][min_idx]
 
-            new_r = np.random.ranf((3)) * target_r
+            new_r = np.random.ranf((10)) * target_r
             new_z = np.full(new_r.shape, min_z)
             new_theta = np.full(new_r.shape, t)
 
@@ -133,13 +133,13 @@ def fillFace(pc, bottom=False, top=False):
         for t in unique_theta:
             indices = np.where(theta == t)
             curr_max_z = np.max(z[indices])
-            if np.abs(curr_max_z - max_z) > 0.1:
+            if np.abs(curr_max_z - max_z) > 0.4:
                 continue
 
             max_idx = np.argmax(z[indices])
             target_r = r[indices][max_idx]
 
-            new_r = np.random.ranf((3)) * target_r
+            new_r = np.random.ranf((10)) * target_r
             new_z = np.full(new_r.shape, max_z)
             new_theta = np.full(new_r.shape, t)
 
