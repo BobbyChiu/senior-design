@@ -1,0 +1,6 @@
+numpy==1.26.1
+open3d==0.17.0
+plotly==5.17.0
+pyvista==0.42.3
+rplidar-roboticia==0.9.5
+scipy==1.11.3
