@@ -99,12 +99,12 @@ def fillFace(pc, bottom=False, top=False):
     unique_theta = np.unique(theta)
 
     # get min z 
-    min_idx = np.argpartition(z, 20)
-    min_z = np.median(z[min_idx[:20]])
+    min_idx = np.argpartition(z, 3)
+    min_z = np.median(z[min_idx[:3]])
 
     # get max z
-    max_idx = np.argpartition(z, -20)
-    max_z = np.median(z[max_idx[-20]])
+    max_idx = np.argpartition(z, -3)
+    max_z = np.median(z[max_idx[-3]])
 
     # fill in points on plane of min_z
     all_new_r = np.empty(0)

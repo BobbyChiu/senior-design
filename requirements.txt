@@ -1,3 +1,4 @@
 rplidar-roboticia
 plotly
 pyvista
+open3d

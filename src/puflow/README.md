@@ -69,6 +69,9 @@ Upsampling point clouds as follows:
 python modules/discrete/upsample.py --source=input --target=output --checkpoint=pretrain/puflow-x4-pugeo.pt --up_ratio=4
 
 # For continuous model
+python modules/continuous/upsample.py --source=input --target=output --checkpoint=pretrain/puflow-x4-cnf-pu1k.pt --up_ratio=4
+
+# For continuous model
 python modules/continuous/upsample.py \
     --source=path/to/input/directory \
     --target=path/to/output/directory \
