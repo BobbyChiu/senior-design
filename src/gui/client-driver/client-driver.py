@@ -12,19 +12,19 @@ def blocking_driver() -> None:
     with socket.create_connection(address=addr) as s:
         print('Connected.')
 
-        s.sendall(b'calibrate')
+        s.sendall(b'calibrateXXXXXXX')
         print('Calibrating.')
 
-        s.sendall(b'scan')
+        s.sendall(b'scanXXXXXXXXXXXX')
         print('Scanning.')
 
-        s.sendall(b'process')
+        s.sendall(b'processXXXXXXXXX')
         print('Processing.')
 
-        s.sendall(b'generate')
+        s.sendall(b'generateXXXXXXXX')
         print('Generating.')
 
-        s.sendall(b'done')
+        s.sendall(b'doneXXXXXXXXXXXX')
         print('Done.')
 
 

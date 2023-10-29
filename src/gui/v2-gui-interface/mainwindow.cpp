@@ -2,6 +2,34 @@
 #include "./ui_mainwindow.h"
 #include <QProcess>
 #include <QDebug>
+#include <QTcpServer>
+#include <QTcpSocket>
+
+void runServer() {
+    QTcpServer server;
+    if (!server.listen(QHostAddress::LocalHost, 12369)) {
+        qDebug() << "Server could not start. Error: " << server.errorString();
+        return;
+    }
+    qDebug() << "Server is listening on port 12369.";
+
+    server.waitForNewConnection(-1);
+    QTcpSocket *client = server.nextPendingConnection();
+    qDebug() << "Connected.";
+
+    while (true)
+    {
+        client->waitForReadyRead();
+        char data[16];
+        auto len = client->read(data, 16);
+        data[len] = '\0';
+        qDebug() << "Received data from client: " << data << len;
+        if (strcmp(data, "doneXXXXXXXXXXXX") == 0)
+        {
+            break;
+        }
+    }
+}
 
 MainWindow::MainWindow(QWidget *parent)
     : QMainWindow(parent)
@@ -53,6 +81,7 @@ void MainWindow::executeStartCommand()
     QProcess process;
 
     // Set the Windows command to run (e.g., dir)
+    runServer();
     process.start("cmd", QStringList() << "/c" << "dir");
 
     // Wait for the process to finish
