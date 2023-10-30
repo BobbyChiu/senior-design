@@ -40,16 +40,19 @@ if __name__ == '__main__':
     # lidar.showPlot(new_main)
     # estimate_angular_speed(lidar.curr_scan[:,0], lidar.curr_scan[:, 2], show_plot=True)
 
-    pc = PointCloud.from_file("lidar-data-xyz/george.xyz")
+    pc = PointCloud.from_file("lidar-data-xyz/best_sandia.xyz")
     plot3d(pc)
     # filtering to remove outliers
-    for i in range(2, 10):
-        mask = PointCloud.knn_filter(pc, i, 0.2 * i)
-        pc = pc[mask[:, 0]]
+    # for i in range(2, 10):
+    #     mask = PointCloud.knn_filter(pc, i, 0.2 * i)
+    #     pc = pc[mask[:, 0]]
     # smoothening
-    pc = PointCloud.median_filter(pc, 25)
+    # pc = PointCloud.ransac_filter(pc)
+    pc = PointCloud.denoise_point_cloud(pc, 0.5, 9, 10, 1)
+    # pc = PointCloud.gaussian_filter(pc, 16, 16)
+    # pc = PointCloud.median_filter(pc, 25)
     # make sure top and bottom are closed
-    # pc = PointCloud.fillFace(pc, bottom=True, top=True)
+    pc = PointCloud.fillFace(pc, bottom=True, top=True)
     # generate mesh
     mesh = PointCloud.to_mesh(pc) 
     plot3d(pc) # show point cloud

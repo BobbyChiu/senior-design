@@ -2,6 +2,7 @@ import numpy as np
 from datetime import datetime
 from scipy.spatial import cKDTree, KDTree
 import open3d as o3d
+from sklearn.linear_model import RANSACRegressor
 
 # converts 2d polar (in degrees) to 2d cartesian
 def pol2cart(radius, angle):
@@ -84,6 +85,50 @@ def median_filter(points, k):
         # Compute median of neighbors for each dimension
         median = np.median(neighbors, axis=0)
         filtered_points[i] = median
+
+    return filtered_points
+
+def ransac_filter(points):
+    # Fit line using RANSAC algorithm
+    ransac = RANSACRegressor(residual_threshold=1)
+    ransac.fit(points, points)
+    inlier_mask = ransac.inlier_mask_
+    # outlier_mask = np.logical_not(inlier_mask
+    filtered_points = points[inlier_mask]
+    return filtered_points
+
+def gaussian_filter(points, k, sigma):
+    """
+    Apply a Gaussian filter to a 3D point cloud based on k nearest neighbors.
+
+    Parameters:
+    - points: numpy array of shape (N, 3) representing N 3D points
+    - k: number of nearest neighbors to consider
+    - sigma: the standard deviation of the Gaussian function
+
+    Returns:
+    - filtered_points: numpy array of shape (N, 3) containing the filtered point cloud
+    """
+
+    def gaussian_weight(distance, sigma):
+        return np.exp(-(distance**2) / (2 * sigma**2))
+
+
+    tree = cKDTree(points)
+    filtered_points = np.empty_like(points)
+
+    for i, point in enumerate(points):
+        # Query k nearest neighbors
+        distances, indices = tree.query(point, k=k)
+        neighbors = points[indices]
+
+        # Compute weights for each neighbor
+        weights = gaussian_weight(distances, sigma)
+        weights /= np.sum(weights)  # Normalize weights
+
+        # Calculate the weighted average
+        weighted_avg = np.sum(neighbors * weights[:, np.newaxis], axis=0)
+        filtered_points[i] = weighted_avg
 
     return filtered_points
 
