@@ -124,6 +124,7 @@ class Lidar():
             scan = np.array(scan)
             scan = scan[:, [2, 1]] # get data as [dist, angle]
             scan[:, 0] = scan[:, 0]/10 # convert from mm to cm
+            scan[:, 1] = 270 - scan[:, 1] # convert angles so that 0 degrees is the z axis
             # filter
             scan = scan[(scan[:, 0] > self.min_dist) & (scan[:,0] < self.max_dist)]
             scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
