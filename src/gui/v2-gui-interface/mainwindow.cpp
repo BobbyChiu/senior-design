@@ -140,26 +140,6 @@ void MainWindow::on_openNotepadButton_clicked()
 
 }
 
-//void MainWindow::on_openNotepadButton_pressed() // TODO: Bring up with Daniel
-//{
-//    // Create a QProcess instance
-//    QProcess process;
-
-//// Set the command to run (Notepad on Windows)
-//#ifdef Q_OS_WIN
-//    //process.start("notepad.exe");
-//    process.start("calc.exe");
-//    process.waitForFinished();
-//    //process.start("explorer.exe", { "/select,", QDir::toNativeSeparators(QDir::homePath()) });
-//#endif
-
-//    // You can add platform-specific commands for other operating systems here
-//    // For example, on Linux/Unix systems, you can use "gedit" or "nano" instead of "notepad.exe"
-
-//    // Wait for the process to finish (optional) Adding two waitForFinished prevent two instances from launching
-//    process.waitForFinished();
-//}
-
 
 void MainWindow::on_calibrateButton_clicked()
 {
