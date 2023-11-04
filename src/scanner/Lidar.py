@@ -14,7 +14,7 @@ def lidar2d_to_3d(scan, angular_speed=30, dist_from_axis=30):
     lidar_dist = scan[:, 0]
     lidar_angle = scan[:, 1]
     t = scan[:, 2]
-    
+
     y, x = PointCloud.pol2cart(lidar_dist, lidar_angle)
 
     # shift coordinate space so that (0, 0) is on the axis of rotation
@@ -41,7 +41,7 @@ def estimate_angular_speed(dist, time, range=(25, 45), show_plot=False):
 
     # pad to 100000 samples to improve frequency resolution
     averages = np.pad(averages, (0, 100000), mode='constant')
-    
+
     sampling_rate = 1/(np.mean(np.diff(unique_times)))
     dft_result = np.fft.fft(averages)
     freqs = np.fft.fftfreq(len(averages), 1 / sampling_rate)
@@ -72,11 +72,13 @@ def estimate_angular_speed(dist, time, range=(25, 45), show_plot=False):
     estimated_angular_speed = max_magnitude_freq * 360
     print(f"Estimated angular speed: {estimated_angular_speed}")
     return estimated_angular_speed
-    
+
 class Lidar():
 
     def __init__(self, port: str, dist_lim: tuple[float, float]=(0,60), angle_lim: tuple[float, float]=(30,150), angular_speed: float=34.2, dist_from_axis: float=30):
-        """Initialize a lidar and start a background thread.
+        """Initialize a lidar.
+
+        You must use the context manager to start the background thread.
 
         Parameters
         ----------
@@ -109,11 +111,6 @@ class Lidar():
         self.start_scan_time = None
         self.background_points = np.array([])
 
-        # Start background thread to stream data from lidar
-        self.kill_thread = False
-        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
-        self.scan_thread.start()
-    
     def _scan_thread(self):
         """Background thread that samples from the lidar.
         If self.scanning is true, then self.curr_scan contains raw lidar data.
@@ -138,7 +135,7 @@ class Lidar():
                 self.scan_time = time.time() - self.start_scan_time
                 scan_with_time = np.column_stack((scan, np.full(scan[:,0].shape, self.scan_time))) # add third coordinate: time
                 self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
-            
+
             if self.kill_thread:
                 return
 
@@ -148,7 +145,7 @@ class Lidar():
 
         if self.scanning:
             raise("Already Scanning")
-        
+
         self.curr_scan = np.empty((0, 3))
         self.start_scan_time = time.time()
         self.scanning = True
@@ -188,9 +185,9 @@ class Lidar():
         lidar_dist = self.curr_scan[:, 0]
         lidar_angle = self.curr_scan[:, 1]
         t = self.curr_scan[:, 2]
-        
+
         y, x = PointCloud.pol2cart(lidar_dist, lidar_angle)
-        
+
         # remove background points
         if self.background_points.size > 0:
             mask = PointCloud.subtract_point_clouds(np.column_stack((x, y)), self.background_points, 0.25)
@@ -199,7 +196,7 @@ class Lidar():
             lidar_angle = lidar_angle[mask]
             t = t[mask]
             self.curr_scan = np.column_stack((lidar_dist, lidar_angle, t))
-            
+
     def showPlot(self, thread_function):
         """Plot the lidar data (converted to cartesian x,y) in real time.
 
@@ -214,11 +211,11 @@ class Lidar():
 
         t = threading.Thread(target=thread_function, daemon=True)
         t.start()
-            
+
         def plot_callback():
             self.plotting = False
             self.disconnect()
-        
+
         Visualization.plot2d_realtime(self.plotting_buffer, callback=plot_callback)
 
     def get3DPointCloud(self, scan: np.ndarray=None) -> np.ndarray:
@@ -228,7 +225,7 @@ class Lidar():
         ----------
         scan : np.ndarray
             Array of lidar data. If None, use the current scan data.
-        
+
         Returns
         -------
         np.ndarray
@@ -254,6 +251,12 @@ class Lidar():
         self.lidar.disconnect()
 
     def __enter__(self):
+        """Start background thread to stream data from lidar.
+        """
+
+        self.kill_thread = False
+        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
+        self.scan_thread.start()
         return self
 
     def __exit__(self, exc_type, exc_value, traceback):
