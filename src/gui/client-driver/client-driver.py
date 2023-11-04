@@ -1,4 +1,5 @@
 import socket
+import time
 from enum import Enum
 
 
@@ -29,4 +30,5 @@ def blocking_driver() -> None:
 
 
 if __name__ == '__main__':
+    #time.sleep(3)
     blocking_driver()
