@@ -146,3 +146,9 @@ void MainWindow::on_actionOpen_Scan_from_Device_triggered()
     }
 }
 
+
+void MainWindow::on_scanButton_clicked()
+{
+    qDebug() << "Start Scan button clicked.";
+}
+

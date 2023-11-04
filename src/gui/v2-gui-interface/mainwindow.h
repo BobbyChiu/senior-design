@@ -29,6 +29,8 @@ private slots:
 
     void on_actionOpen_Scan_from_Device_triggered();
 
+    void on_scanButton_clicked();
+
 private:
     Ui::MainWindow *ui;
 };
