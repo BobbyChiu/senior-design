@@ -60,26 +60,6 @@ MainWindow::~MainWindow()
 }
 
 
-
-// TODO: Implement support for Linux/Unix Systems?
-//void MainWindow::executeStartCommand()
-//{
-//    // Create a QProcess instance
-//    QProcess process;
-
-//    // Set the command to run (e.g., ls)
-//    process.start("ls");
-
-//    // Wait for the process to finish
-//    process.waitForFinished();
-
-//    // Read the output from the process
-//    QString output = process.readAllStandardOutput();
-
-//    // Print the output or display it in a text widget, etc.
-//    qDebug() << "Command Output:" << output;
-//}
-
 // Function for windows specific OS`
 void MainWindow::executeStartCommand()
 {
