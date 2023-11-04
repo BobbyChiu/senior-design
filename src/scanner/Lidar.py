@@ -75,7 +75,24 @@ def estimate_angular_speed(dist, time, range=(25, 45), show_plot=False):
     
 class Lidar():
 
-    def __init__(self, port, dist_lim=(0,60), angle_lim=(30,150), angular_speed=34.2, dist_from_axis=30):
+    def __init__(self, port: str, dist_lim: tuple[float, float]=(0,60), angle_lim: tuple[float, float]=(30,150), angular_speed: float=34.2, dist_from_axis: float=30):
+        """Initialize a lidar and start a background thread.
+
+        Parameters
+        ----------
+        port : str
+            Serial port name.
+        dist_lim : (float, float)
+            Lidar distance limits to include (cm).
+        angle_lim : (float, float)
+            Lidar angle limits to include (deg).
+        angular_speed : float
+            Angular speed of the turntable (deg/s).
+            Currently ignored in favor of FFT.
+        dist_from_axis : float
+            Horizontal distance from lidar to the turntable's axis of rotation (cm).
+        """
+
         self.TURNTABLE_RADIUS = 8 # cm
         self.lidar = RPLidar(port)
         self.curr_scan = np.empty((0, 3))
@@ -92,38 +109,59 @@ class Lidar():
         self.start_scan_time = None
         self.background_points = np.array([])
 
-        def scanThread():
-            for i, scan in enumerate(self.lidar.iter_scans()):
-                # add data to plotting queue
-                scan = np.array(scan)
-                scan = scan[:, [2, 1]] # get data as [dist, angle]
-                scan[:, 0] = scan[:, 0]/10 # convert from mm to cm
-                scan[:, 1] = 270 - scan[:, 1] # convert angles so that 0 degrees is the z axis
-                # filter
-                scan = scan[(scan[:, 0] > self.min_dist) & (scan[:,0] < self.max_dist)]
-                scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
-
-                if self.plotting:
-                    x, y = PointCloud.pol2cart(scan[:,0], scan[:, 1])
-                    self.plotting_buffer.put(np.column_stack((y, x)))
-
-                # update cumulative scanning data
-                if self.scanning:
-                    self.scan_time = time.time() - self.start_scan_time
-                    scan_with_time = np.column_stack((scan, np.full(scan[:,0].shape, self.scan_time))) # add third coordinate: time
-                    self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
+        # Start background thread to stream data from lidar
+        self.kill_thread = False
+        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
+        self.scan_thread.start()
     
-        t = threading.Thread(target=scanThread, daemon=True)
-        t.start()
+    def _scan_thread(self):
+        """Background thread that samples from the lidar.
+        If self.scanning is true, then self.curr_scan contains raw lidar data.
+        This thread can be killed by setting self.kill_thread to true.
+        """
+        for i, scan in enumerate(self.lidar.iter_scans()):
+            # add data to plotting queue
+            scan = np.array(scan)
+            scan = scan[:, [2, 1]] # get data as [dist, angle]
+            scan[:, 0] = scan[:, 0]/10 # convert from mm to cm
+            scan[:, 1] = 270 - scan[:, 1] # convert angles so that 0 degrees is the z axis
+            # filter
+            scan = scan[(scan[:, 0] > self.min_dist) & (scan[:,0] < self.max_dist)]
+            scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
 
-    def calibrate(self, calibration_time=5):
+            if self.plotting:
+                x, y = PointCloud.pol2cart(scan[:,0], scan[:, 1])
+                self.plotting_buffer.put(np.column_stack((y, x)))
+
+            # update cumulative scanning data
+            if self.scanning:
+                self.scan_time = time.time() - self.start_scan_time
+                scan_with_time = np.column_stack((scan, np.full(scan[:,0].shape, self.scan_time))) # add third coordinate: time
+                self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
+            
+            if self.kill_thread:
+                return
+
+    def startScan(self):
+        """Start a new scan, clearing previous scan data.
+        """
+
         if self.scanning:
-            raise("There is an ongoing scan, cannot calibrate")
+            raise("Already Scanning")
         
-        print(f"START CALIBRATION, DURATION: {calibration_time} s")
-        self.startScan()
-        time.sleep(calibration_time)
-        self.stopScan()
+        self.curr_scan = np.empty((0, 3))
+        self.start_scan_time = time.time()
+        self.scanning = True
+
+    def stopScan(self):
+        """Stop the scan.
+        """
+
+        self.scanning = False
+
+    def calibrate_on_current(self):
+        """Perform the calibration sequence using data from startScan-stopScan.
+        """
 
         lidar_dist = self.curr_scan[:, 0]
         lidar_angle = self.curr_scan[:, 1]
@@ -142,7 +180,10 @@ class Lidar():
 
         print("DONE CALIBRATION")
 
-    def remove_background(self):
+    def remove_background_on_current(self):
+        """Remove background points in-place from data from startScan-stopScan.
+        """
+
         # convert lidar dist, lidar angle to x, y in lidar plane
         lidar_dist = self.curr_scan[:, 0]
         lidar_angle = self.curr_scan[:, 1]
@@ -159,16 +200,15 @@ class Lidar():
             t = t[mask]
             self.curr_scan = np.column_stack((lidar_dist, lidar_angle, t))
             
-    
-    def startScan(self):
-        if self.scanning:
-            raise("Already Scanning")
-        
-        self.curr_scan = np.empty((0, 3))
-        self.start_scan_time = time.time()
-        self.scanning = True
-        
     def showPlot(self, thread_function):
+        """Plot the lidar data (converted to cartesian x,y) in real time.
+
+        Parameters
+        ----------
+        thread_function : Callable
+            Function to run while plotting.
+        """
+
         self.plotting_buffer = Queue()
         self.plotting = True
 
@@ -181,11 +221,19 @@ class Lidar():
         
         Visualization.plot2d_realtime(self.plotting_buffer, callback=plot_callback)
 
-    # stop scan and remove background
-    def stopScan(self):
-        self.scanning = False
+    def get3DPointCloud(self, scan: np.ndarray=None) -> np.ndarray:
+        """Get an array of points (x,y,z) from the provided scan data or the current scan data.
 
-    def get3DPointCloud(self, scan=None):
+        Parameters
+        ----------
+        scan : np.ndarray
+            Array of lidar data. If None, use the current scan data.
+        
+        Returns
+        -------
+        np.ndarray
+            Array of points.
+        """
 
         if scan is None:
             scan = self.curr_scan
@@ -196,8 +244,22 @@ class Lidar():
         result = np.column_stack(lidar2d_to_3d(scan, self.angular_speed, self.dist_from_axis))
 
         return result
-        
+
     def disconnect(self):
+        """Stop and disconnect the lidar.
+        """
+
         self.lidar.stop()
         self.lidar.stop_motor()
         self.lidar.disconnect()
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        """Attempt to kill the background thread. Also try to disconnect the lidar.
+        """
+
+        self.kill_thread = True
+        self.scan_thread.join()
+        self.disconnect()
