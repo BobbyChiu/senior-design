@@ -5,6 +5,7 @@
 #include <QTcpServer>
 #include <QTcpSocket>
 #include <QMenuBar>
+#include <QFileDialog>
 
 void runServer() {
     QTcpServer server;
@@ -168,5 +169,20 @@ void MainWindow::on_calibrateButton_clicked()
 void MainWindow::on_calibrationDurationSlider_valueChanged(int value)
 {
     ui->calibrationDurationLabel->setText(QString("Calibration Duration (seconds): %1").arg(value));
+}
+
+
+void MainWindow::on_actionOpen_Scan_from_Device_triggered()
+{
+    QString filePath = QFileDialog::getOpenFileName(this, "Open File", "", "Text Files (*.txt);;All Files (*)");
+
+    if (!filePath.isEmpty()) {
+        // You can now work with the selected file using filePath
+        // For example, you can read and display its contents.
+        qDebug() << "Filepath not empty";
+    }
+    else{
+        qDebug() << "Filepath empty";
+    }
 }
 

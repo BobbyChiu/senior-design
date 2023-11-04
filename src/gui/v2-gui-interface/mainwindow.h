@@ -27,9 +27,9 @@ private slots:
 
     void on_calibrateButton_clicked();
 
-    void on_calibrationDurationSlider_actionTriggered(int action);
-
     void on_calibrationDurationSlider_valueChanged(int value);
+
+    void on_actionOpen_Scan_from_Device_triggered();
 
 private:
     Ui::MainWindow *ui;
