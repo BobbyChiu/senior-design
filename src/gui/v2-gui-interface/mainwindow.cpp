@@ -111,8 +111,8 @@ void MainWindow::executeStartCommand()
 
 void MainWindow::on_horizontalSlider_valueChanged(int value)
 {
-    qDebug() << "Slider Value Changed:" << value;
-    ui->label->setText(QString("Selected Number of Scans: %1").arg(value));
+    //qDebug() << "Slider Value Changed:" << value;
+    ui->label->setText(QString("Scan Duration (seconds): %1").arg(value));
 }
 
 
@@ -157,4 +157,15 @@ void MainWindow::on_openNotepadButton_clicked()
 //    // Wait for the process to finish (optional) Adding two waitForFinished prevent two instances from launching
 //    process.waitForFinished();
 //}
+
+
+void MainWindow::on_calibrateButton_clicked()
+{
+    // TODO - integrate calibrate functionality
+    qDebug() << "Calibrate button clicked.";
+}
+void MainWindow::on_calibrationDurationSlider_valueChanged(int value)
+{
+    ui->calibrationDurationLabel->setText(QString("Calibration Duration (seconds): %1").arg(value));
+}
 
