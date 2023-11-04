@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QTcpServer>
 #include <QTcpSocket>
+#include <QMenuBar>
 
 void runServer() {
     QTcpServer server;

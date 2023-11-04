@@ -30,24 +30,24 @@
    <widget class="QSlider" name="horizontalSlider">
     <property name="geometry">
      <rect>
-      <x>300</x>
-      <y>160</y>
+      <x>10</x>
+      <y>90</y>
       <width>160</width>
-      <height>16</height>
+      <height>31</height>
      </rect>
     </property>
     <property name="orientation">
      <enum>Qt::Horizontal</enum>
     </property>
     <property name="tickPosition">
-     <enum>QSlider::TicksBelow</enum>
+     <enum>QSlider::NoTicks</enum>
     </property>
    </widget>
    <widget class="QLabel" name="label">
     <property name="geometry">
      <rect>
-      <x>290</x>
-      <y>120</y>
+      <x>10</x>
+      <y>70</y>
       <width>181</width>
       <height>20</height>
      </rect>
@@ -85,8 +85,8 @@
    <widget class="QPushButton" name="calibrateButton">
     <property name="geometry">
      <rect>
-      <x>100</x>
-      <y>190</y>
+      <x>174</x>
+      <y>45</y>
       <width>80</width>
       <height>24</height>
      </rect>
@@ -98,8 +98,8 @@
    <widget class="QSlider" name="calibrationDurationSlider">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>150</y>
+      <x>10</x>
+      <y>50</y>
       <width>160</width>
       <height>16</height>
      </rect>
@@ -111,14 +111,40 @@
    <widget class="QLabel" name="calibrationDurationLabel">
     <property name="geometry">
      <rect>
-      <x>30</x>
-      <y>120</y>
+      <x>10</x>
+      <y>20</y>
       <width>191</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
      <string>Calibration Duration (seconds): </string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="beforeScanningLabel">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>0</y>
+      <width>91</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Before Scanning</string>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="scanButton">
+    <property name="geometry">
+     <rect>
+      <x>173</x>
+      <y>92</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Start Scan</string>
     </property>
    </widget>
   </widget>
