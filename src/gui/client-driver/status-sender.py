@@ -14,11 +14,11 @@ class StatusSender:
         """
         pass
 
-    msg_calibrate = StatusMessage(b'calibrate')
-    msg_scan = StatusMessage(b'scan')
-    msg_process = StatusMessage(b'process')
-    msg_generate = StatusMessage(b'generate')
-    msg_done = StatusMessage(b'done')
+    msg_calibrate = StatusMessage(b'calibrateXXXXXXX')
+    msg_scan = StatusMessage(b'scanXXXXXXXXXXXX')
+    msg_process = StatusMessage(b'processXXXXXXXXX')
+    msg_generate = StatusMessage(b'generateXXXXXXXX')
+    msg_done = StatusMessage(b'doneXXXXXXXXXXXX')
 
 
     def __init__(self, host: str='localhost', port: int=12369):

@@ -23,7 +23,11 @@ private slots:
 
     void on_openNotepadButton_clicked();
 
-    //void on_openNotepadButton_pressed(); // TODO: Bring up to Daniel
+    void on_calibrateButton_clicked();
+
+    void on_calibrationDurationSlider_valueChanged(int value);
+
+    void on_actionOpen_Scan_from_Device_triggered();
 
 private:
     Ui::MainWindow *ui;
