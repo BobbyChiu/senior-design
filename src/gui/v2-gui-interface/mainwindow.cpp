@@ -45,8 +45,7 @@ MainWindow::MainWindow(QWidget *parent)
     // Connect the button's clicked() signal to a custom slot
     QObject::connect(ui->startServerClient, &QPushButton::clicked, this, &MainWindow::executeStartCommand);
 
-    // Assuming your slider object is named ui->horizontalSlider
-    connect(ui->horizontalSlider, &QSlider::valueChanged, this, &MainWindow::on_horizontalSlider_valueChanged);
+    connect(ui->scanDurationSlider, &QSlider::valueChanged, this, &MainWindow::on_horizontalSlider_valueChanged);
 
     // Connect the button's clicked() signal to the openNotepad() slot
     connect(ui->openNotepadButton, &QPushButton::clicked, this, &MainWindow::on_openNotepadButton_clicked);
@@ -124,7 +123,9 @@ void MainWindow::on_openNotepadButton_clicked()
 void MainWindow::on_calibrateButton_clicked()
 {
     // TODO - integrate calibrate functionality
-    qDebug() << "Calibrate button clicked.";
+    QString command = QString("calibrate --calibration-duration %1").arg(ui->calibrationDurationSlider->value());
+    qDebug() << command;
+
 }
 void MainWindow::on_calibrationDurationSlider_valueChanged(int value)
 {
@@ -140,6 +141,8 @@ void MainWindow::on_actionOpen_Scan_from_Device_triggered()
         // You can now work with the selected file using filePath
         // For example, you can read and display its contents.
         qDebug() << "Filepath not empty";
+        QString command = QString("open --open-xyz %1").arg(filePath);
+        qDebug() << command;
     }
     else{
         qDebug() << "Filepath empty";
@@ -149,6 +152,40 @@ void MainWindow::on_actionOpen_Scan_from_Device_triggered()
 
 void MainWindow::on_scanButton_clicked()
 {
-    qDebug() << "Start Scan button clicked.";
+    QString command = QString("scan --scan-duration %1").arg(ui->scanDurationSlider->value());
+    qDebug() << command;
+}
+
+
+void MainWindow::on_checkBox_stateChanged(int arg1)
+{
+
+    QString removeBackgroundState = QString("state changed: %1").arg(arg1);
+    qDebug() << removeBackgroundState;
+
+}
+
+
+void MainWindow::on_generateButton_clicked()
+{
+    QString command("generate");
+
+    if (ui->checkBox->isChecked())
+    {
+        command += " --remove-background";
+    }
+
+    command += " --k-nn-thresholding " + ui->knnThresholdingInputs->text();
+
+    // TODO: Find a way to make this optional?
+    command += " --gaussian " + ui->meanInput->text() + " " + ui->stdDevInput->text();
+
+
+    command += " --scaling " + ui->scalingInput->text();
+
+    command += " --save-as-stl " + ui->stlSaveInput->text();
+    command += " --save-as-xyz " + ui->xyzSaveInput->text();
+
+    qDebug() << command;
 }
 

@@ -27,7 +27,7 @@
      <string>Start Server Client</string>
     </property>
    </widget>
-   <widget class="QSlider" name="horizontalSlider">
+   <widget class="QSlider" name="scanDurationSlider">
     <property name="geometry">
      <rect>
       <x>10</x>
@@ -151,9 +151,9 @@
     <property name="geometry">
      <rect>
       <x>260</x>
-      <y>6</y>
-      <width>16</width>
-      <height>191</height>
+      <y>12</y>
+      <width>20</width>
+      <height>211</height>
      </rect>
     </property>
     <property name="orientation">
@@ -217,19 +217,19 @@
      <rect>
       <x>274</x>
       <y>90</y>
-      <width>49</width>
+      <width>111</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
-     <string>Gaussian</string>
+     <string>Num.  Neighbors</string>
     </property>
    </widget>
    <widget class="QCheckBox" name="checkBox">
     <property name="geometry">
      <rect>
       <x>273</x>
-      <y>130</y>
+      <y>156</y>
       <width>131</width>
       <height>22</height>
      </rect>
@@ -238,11 +238,11 @@
      <string>Remove Background</string>
     </property>
    </widget>
-   <widget class="QLineEdit" name="lineEdit">
+   <widget class="QLineEdit" name="scalingInput">
     <property name="geometry">
      <rect>
-      <x>500</x>
-      <y>130</y>
+      <x>498</x>
+      <y>156</y>
       <width>113</width>
       <height>24</height>
      </rect>
@@ -252,13 +252,115 @@
     <property name="geometry">
      <rect>
       <x>450</x>
-      <y>133</y>
+      <y>159</y>
       <width>49</width>
       <height>16</height>
      </rect>
     </property>
     <property name="text">
      <string>Scaling</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="knnThresholdingInputs">
+    <property name="geometry">
+     <rect>
+      <x>380</x>
+      <y>40</y>
+      <width>113</width>
+      <height>24</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_8">
+    <property name="geometry">
+     <rect>
+      <x>274</x>
+      <y>120</y>
+      <width>121</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Gaussian Std Deviation</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="meanInput">
+    <property name="geometry">
+     <rect>
+      <x>401</x>
+      <y>85</y>
+      <width>113</width>
+      <height>24</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="stdDevInput">
+    <property name="geometry">
+     <rect>
+      <x>400</x>
+      <y>120</y>
+      <width>113</width>
+      <height>24</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_9">
+    <property name="geometry">
+     <rect>
+      <x>500</x>
+      <y>190</y>
+      <width>71</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Save as STL</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="label_10">
+    <property name="geometry">
+     <rect>
+      <x>500</x>
+      <y>220</y>
+      <width>71</width>
+      <height>16</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Save as XYZ</string>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="stlSaveInput">
+    <property name="geometry">
+     <rect>
+      <x>574</x>
+      <y>187</y>
+      <width>113</width>
+      <height>24</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QLineEdit" name="xyzSaveInput">
+    <property name="geometry">
+     <rect>
+      <x>574</x>
+      <y>220</y>
+      <width>113</width>
+      <height>24</height>
+     </rect>
+    </property>
+   </widget>
+   <widget class="QPushButton" name="generateButton">
+    <property name="geometry">
+     <rect>
+      <x>340</x>
+      <y>280</y>
+      <width>80</width>
+      <height>24</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Generate</string>
     </property>
    </widget>
   </widget>

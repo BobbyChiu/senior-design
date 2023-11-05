@@ -31,6 +31,10 @@ private slots:
 
     void on_scanButton_clicked();
 
+    void on_checkBox_stateChanged(int arg1);
+
+    void on_generateButton_clicked();
+
 private:
     Ui::MainWindow *ui;
 };
