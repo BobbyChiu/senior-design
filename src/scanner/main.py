@@ -11,7 +11,7 @@ def do_calibration(lidar: Lidar, **kwargs) -> None:
     print("10 Seconds till calibration. Remove any objects on turntable.")
     time.sleep(10)
 
-    calibration_time = 5
+    calibration_time = kwargs['calibration_duration']
     print(f"START CALIBRATION, DURATION: {calibration_time} s")
     lidar.startScan()
     time.sleep(calibration_time)
@@ -24,14 +24,17 @@ def do_scan(lidar: Lidar, **kwargs) -> None:
     print("10 Seconds till scanning. Place object on turntable.")
     time.sleep(10)
 
-    print("Scanning for 30 seconds")
+    scan_duration = kwargs['scan_duration']
+    print(f"Scanning for {scan_duration} seconds")
     lidar.startScan()
-    time.sleep(30)
+    time.sleep(scan_duration)
     lidar.stopScan()
 
 
 def do_processing_on_lidar(lidar: Lidar, **kwargs):
-    lidar.remove_background_on_current()
+    if kwargs['remove_background']:
+        lidar.remove_background_on_current()
+
     pc = lidar.get3DPointCloud()
 
     plot3d(pc) # show point cloud
@@ -40,15 +43,22 @@ def do_processing_on_lidar(lidar: Lidar, **kwargs):
 
 def do_processing_on_point_cloud(pc, **kwargs):
     # filtering to remove outliers
-    for i in range(2, 10):
-        mask = PointCloud.knn_filter(pc, i, 0.2 * i)
-        pc = pc[mask[:, 0]]
+    knn_args = kwargs['k_nn_thresholding']
+    if knn_args:
+        for k, threshold in knn_args.items():
+            mask = PointCloud.knn_filter(pc, k, threshold)
+            pc = pc[mask[:, 0]]
 
     # smoothening
     pc = PointCloud.median_filter(pc, 25)
+    gaussian_args = kwargs['gaussian']
+    if gaussian_args:
+        pc = PointCloud.gaussian_filter(pc, gaussian_args['k'], gaussian_args['sigma'])
 
     # make sure top and bottom are closed
     pc = PointCloud.fillFace(pc, bottom=True, top=True)
+
+    return pc
 
 
 def do_generate_mesh(pc, **kwargs):
@@ -61,44 +71,14 @@ def do_generate_mesh(pc, **kwargs):
 
 def do_generate_files(pc=None, lidar=None, mesh=None, **kwargs) -> None:
     if pc:
-        PointCloud.to_file(pc, folder="lidar-data-xyz")
+        PointCloud.to_file(pc, filename=kwargs.get('save_as_xyz'))
 
     if lidar:
         PointCloud.to_file(lidar.curr_scan, folder="lidar-data-2d")
 
     if mesh:
         # save as stl file
-        PointCloud.mesh_to_stl(mesh, 'stl', 'first_sandia.stl')
-
-
-
-def do_pipeline(**kwargs) -> None:
-    with Lidar('com3', dist_lim=(0,100), angle_lim=(0,180), angular_speed=30, dist_from_axis=30) as lidar:
-        def new_main():
-            # Prepare for calibration
-            print("10 Seconds till calibration. Remove any objects on turntable.")
-            time.sleep(10)
-
-            # Calibrate
-            do_calibration(lidar=lidar, **kwargs)
-
-            # Prepare for scanning
-            print("10 Seconds till scanning. Place object on turntable.")
-            time.sleep(10)
-
-            # Scanning
-            do_scan(lidar=lidar, **kwargs)
-
-            # Processing
-            pc = do_processing_on_lidar(lidar=lidar, **kwargs)
-            pc = do_processing_on_point_cloud(pc=pc, **kwargs)
-
-            # Generate
-            mesh = do_generate_mesh(pc=pc, **kwargs)
-            do_generate_files(pc=pc, lidar=lidar, mesh=mesh, **kwargs)
-
-        lidar.showPlot(new_main)
-        estimate_angular_speed(lidar.curr_scan[:,0], lidar.curr_scan[:, 2], show_plot=True)
+        PointCloud.mesh_to_stl(mesh, filename=kwargs.get('save_as_stl'))
 
 
 if __name__ == '__main__':
@@ -124,8 +104,8 @@ if __name__ == '__main__':
 
     # Generation arguments
     generation_parser = argparse.ArgumentParser(add_help=False)
-    generation_parser.add_argument('--save-as-stl', type=pathlib.Path, help='stl file to save to', metavar='STL_FILE')
-    generation_parser.add_argument('--save-as-xyz', type=pathlib.Path, help='xyz file to save to', metavar='XYZ_FILE')
+    generation_parser.add_argument('--save-as-stl', nargs='?', default=pathlib.Path.cwd(), type=pathlib.Path, help='stl file to save to', metavar='STL_FILE')
+    generation_parser.add_argument('--save-as-xyz', nargs='?', default=pathlib.Path.cwd(), type=pathlib.Path, help='xyz file to save to', metavar='XYZ_FILE')
 
     parser = argparse.ArgumentParser(parents=[calibration_parser, scan_parser, open_parser, processing_parser, generation_parser])
     actions = ['calibrate', 'scan', 'open', 'generate']
@@ -168,7 +148,7 @@ if __name__ == '__main__':
         return args_dict
 
 
-    test_input = [
+    input_streamlike = [
         ['calibrate', '--calibration-duration', '5'],
         ['scan', '--scan-duration', '30'],
         ['generate',
@@ -183,21 +163,42 @@ if __name__ == '__main__':
                 '8', '1.6',
                 '9', '1.8',
                 '10', '2.0',
-            '--gaussian', '0', '1',
-            '--save-as-stl', 'first-sandia.stl',
-            '--save-as-xyz', 'first-sandia.xyz',
+            '--save-as-stl', 'stl/first-sandia.xyz',
+            '--save-as-xyz', 'lidar-data-xyz',
         ],
     ]
 
-    while True:
-        # Receive input
-        for arguments in test_input:
-            arg_dict = parse_arguments(arguments)
-            print(arg_dict)
 
+    with Lidar('com3', dist_lim=(0,100), angle_lim=(0,180), angular_speed=30, dist_from_axis=30) as lidar:
+        # Keep state
+        pc = None
+        mesh = None
+
+        # while True:
+            # Receive input
+            # Do action
+            # Check exit condition
+            # pass
+
+        for arguments in input_streamlike:
+            # Receive input
+            arg_dict = parse_arguments(arguments)
+
+            # Do action
+            if arg_dict['do'] == 'calibrate':
+                do_calibration(lidar=lidar, **arg_dict)
+            elif arg_dict['do'] == 'scan':
+                do_scan(lidar=lidar, **arg_dict)
+            elif arg_dict['do'] == 'open':
+                pc = PointCloud.from_file(arg_dict['open_xyz'])
+            elif arg_dict['do'] == 'generate':
+                pc = do_processing_on_lidar(lidar=lidar, **arg_dict)
+                pc = do_processing_on_point_cloud(pc=pc, **arg_dict)
+
+                mesh = do_generate_mesh(pc, **arg_dict)
+
+                do_generate_files(pc=pc, lidar=lidar, mesh=mesh, **arg_dict)
         # Exit condition
-        if True:
-            break
 
 
     # with Lidar('com3', dist_lim=(0,100), angle_lim=(0,180), angular_speed=30, dist_from_axis=30) as lidar:

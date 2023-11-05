@@ -22,10 +22,14 @@ def cylindrical2cart(r, theta, z):
 def from_file(path):
     return np.loadtxt(path)
 
-def to_file(pc, folder, filename=None):
+def to_file(pc, *, folder=None, filename=None):
     if filename == None:
         filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".xyz"
-    np.savetxt(f"{folder}/{filename}", pc, fmt="%f")
+
+    if folder:
+        np.savetxt(f"{folder}/{filename}", pc, fmt="%f")
+    else:
+        np.savetxt(f"{filename}", pc, fmt="%f")
 
 def subtract_point_clouds(cloud1, cloud2, threshold):
     """
@@ -218,7 +222,7 @@ def to_mesh(points_3d):
     mesh.paint_uniform_color([1, 0.706, 0])
     return mesh
 
-def mesh_to_stl(mesh, folder, filename=None):
+def mesh_to_stl(mesh, *, folder=None, filename=None):
     if filename == None:
         filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".stl"
     o3d.io.write_triangle_mesh(f"{folder}/{filename}", mesh)
