@@ -43,7 +43,7 @@ MainWindow::MainWindow(QWidget *parent)
 {
     ui->setupUi(this);
     // Connect the button's clicked() signal to a custom slot
-    QObject::connect(ui->startButton, &QPushButton::clicked, this, &MainWindow::executeStartCommand);
+    QObject::connect(ui->startServerClient, &QPushButton::clicked, this, &MainWindow::executeStartCommand);
 
     // Assuming your slider object is named ui->horizontalSlider
     connect(ui->horizontalSlider, &QSlider::valueChanged, this, &MainWindow::on_horizontalSlider_valueChanged);
