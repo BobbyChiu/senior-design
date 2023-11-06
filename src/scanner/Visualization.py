@@ -27,7 +27,7 @@ def plot3d(points_3d):
     # Render the plot
     plotly.offline.iplot(plot_figure)
 
-def plot2d_realtime(buffer_xy, type='vertical_slice', interval=100, xlim=(0, 50), ylim=(-25,25), callback=None):
+def plot2d_realtime(buffer_xy, type='vertical_slice', interval=50, xlim=(0, 50), ylim=(-25,25), callback=None):
     # plot
     fig, ax = plt.subplots()
     sc = ax.scatter([], [])

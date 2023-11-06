@@ -88,15 +88,6 @@ def median_filter(points, k):
 
     return filtered_points
 
-def ransac_filter(points):
-    # Fit line using RANSAC algorithm
-    ransac = RANSACRegressor(residual_threshold=1)
-    ransac.fit(points, points)
-    inlier_mask = ransac.inlier_mask_
-    # outlier_mask = np.logical_not(inlier_mask
-    filtered_points = points[inlier_mask]
-    return filtered_points
-
 def gaussian_filter(points, k, sigma):
     """
     Apply a Gaussian filter to a 3D point cloud based on k nearest neighbors.
@@ -144,12 +135,12 @@ def fillFace(pc, bottom=False, top=False):
     unique_theta = np.unique(theta)
 
     # get min z 
-    min_idx = np.argpartition(z, 3)
-    min_z = np.median(z[min_idx[:3]])
+    min_idx = np.argpartition(z, 10)
+    min_z = np.median(z[min_idx[:10]])
 
     # get max z
-    max_idx = np.argpartition(z, -3)
-    max_z = np.median(z[max_idx[-3]])
+    max_idx = np.argpartition(z, -10)
+    max_z = np.median(z[max_idx[-10]])
 
     # fill in points on plane of min_z
     all_new_r = np.empty(0)
@@ -197,6 +188,144 @@ def fillFace(pc, bottom=False, top=False):
     new_points = np.column_stack((x, y, all_new_z))
     pc = np.vstack((pc, new_points))
     return pc
+
+
+def best_fit_transform(A, B):
+    '''
+    Calculates the least-squares best-fit transform between corresponding 3D points A->B
+    Input:
+      A: Nx3 numpy array of corresponding 3D points
+      B: Nx3 numpy array of corresponding 3D points
+    Returns:
+      T: 4x4 homogeneous transformation matrix
+      R: 3x3 rotation matrix
+      t: 3x1 translation vector
+    '''
+    
+    assert A.shape == B.shape
+
+    # Find the centroid of each set
+    centroid_A = np.mean(A, axis=0)
+    centroid_B = np.mean(B, axis=0)
+    
+    # Centre the points
+    AA = A - centroid_A
+    BB = B - centroid_B
+
+    # Dot is matrix multiplication for array
+    H = np.dot(AA.T, BB)
+    U, S, Vt = np.linalg.svd(H)
+
+    # Calculate rotation matrix
+    R = np.dot(Vt.T, U.T)
+
+    # Special reflection case
+    if np.linalg.det(R) < 0:
+       Vt[2,:] *= -1
+       R = np.dot(Vt.T, U.T)
+
+    # Calculate translation vector
+    t = centroid_B.T - np.dot(R, centroid_A.T)
+
+    # Construct the transformation matrix
+    T = np.identity(4)
+    T[:3, :3] = R
+    T[:3, 3] = t
+
+    return T, R, t
+
+def nearest_neighbor(src, dst):
+    '''
+    Find the nearest (Euclidean) neighbor in dst for each point in src
+    Input:
+        src: Nx3 array of points
+        dst: Nx3 array of points
+    Output:
+        distances: Euclidean distances of the nearest neighbor
+        indices: dst indices of the nearest neighbor
+    '''
+
+    # Create a KD-Tree
+    kdtree = KDTree(dst)
+
+    # Query the nearest neighbour
+    distances, indices = kdtree.query(src, k=1)
+
+    return distances, indices
+
+def icp(A, B, init_pose=None, max_iterations=20, tolerance=0.001):
+    '''
+    The Iterative Closest Point method: finds best-fit transform that maps points A on to points B
+    Input:
+        A: Nx3 numpy array of source 3D points
+        B: Nx3 numpy array of destination 3D point
+        init_pose: 4x4 homogeneous transformation matrix
+        max_iterations: exit algorithm after max_iterations
+        tolerance: convergence criteria
+    Output:
+        T: final homogeneous transformation matrix that maps A on to B
+        distances: Euclidean distances (errors) of the nearest neighbor
+        i: number of iterations to converge
+    '''
+
+    # Make points homogeneous, copy them to maintain the originals
+    src = np.ones((4,A.shape[0]))
+    dst = np.ones((4,B.shape[0]))
+    src[:3,:] = np.copy(A.T)
+    dst[:3,:] = np.copy(B.T)
+
+    # Apply the initial pose estimation
+    if init_pose is not None:
+        src = np.dot(init_pose, src)
+
+    prev_error = 0
+
+    for i in range(max_iterations):
+        # Find the nearest neighbors between the current source and destination points
+        distances, indices = nearest_neighbor(src[:3,:].T, dst[:3,:].T)
+
+        # Compute the transformation between the current source and nearest destination points
+        T,_,_ = best_fit_transform(src[:3,:].T, dst[:3,indices].T)
+
+        # Update the current source
+        src = np.dot(T, src)
+
+        # Check error
+        mean_error = np.mean(distances)
+        if np.abs(prev_error - mean_error) < tolerance:
+            break
+        prev_error = mean_error
+
+    # Calculate final transformation
+    T,_,_ = best_fit_transform(A, src[:3,:].T)
+
+    return T, distances, i+1
+
+
+def combine_point_clouds(A, B):
+    """
+    Combine two point clouds using ICP.
+    
+    Parameters:
+    A -- numpy array of shape (N, 3), the source point cloud.
+    B -- numpy array of shape (M, 3), the target point cloud.
+    T -- numpy array of shape (4, 4), the transformation matrix to apply to A.
+
+    Returns:
+    combined -- numpy array of shape (N+M, 3), the combined point cloud.
+    """
+
+    T = icp(A, B)[0]
+
+    # Transform source points
+    homogenous_coordinates = np.hstack((A, np.ones((A.shape[0], 1))))
+    transformed_A = (T @ homogenous_coordinates.T).T[:, :3]
+
+    # Concatenate with target points
+    combined = np.vstack((transformed_A, B))
+
+    return combined
+
 
 def to_mesh(points_3d):
     pcd = o3d.geometry.PointCloud()
