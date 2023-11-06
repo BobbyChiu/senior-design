@@ -2,6 +2,9 @@
 #define MAINWINDOW_H
 
 #include <QMainWindow>
+#include <QProcess>
+#include <QTcpServer>
+#include <QTcpSocket>
 
 QT_BEGIN_NAMESPACE
 namespace Ui { class MainWindow; }
@@ -14,6 +17,8 @@ class MainWindow : public QMainWindow
 public:
     MainWindow(QWidget *parent = nullptr);
     ~MainWindow();
+
+    void startServer();
 
 public slots:
     void executeStartCommand();
@@ -36,6 +41,15 @@ private slots:
     void on_generateButton_clicked();
 
 private:
+    void sendData(const QString &str);
+
+    QString receiveData();
+
+private:
     Ui::MainWindow *ui;
+
+    QTcpServer server;
+    QProcess process;
+    QTcpSocket *client = nullptr;
 };
 #endif // MAINWINDOW_H

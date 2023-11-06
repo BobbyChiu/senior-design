@@ -83,20 +83,20 @@ class NetstringClient:
 
 
 if __name__ == '__main__':
-    print(NetstringClient._netstring_to_data(b'49:Here are instructions for performing this action.,'))
-    print('Performing action in client.')
-    print(NetstringClient._data_to_netstring(b'Client is done with performing the action.'))
+    # print(NetstringClient._netstring_to_data(b'49:Here are instructions for performing this action.,'))
+    # print('Performing action in client.')
+    # print(NetstringClient._data_to_netstring(b'Client is done with performing the action.'))
 
-    # host = 'localhost'
-    # port = 12369
+    host = 'localhost'
+    port = 12369
 
-    # print(f'Trying to connect to {(host, port)}.')
+    print(f'Trying to connect to {(host, port)}.')
 
-    # with NetstringClient(host, port) as nsc:
-    #     print('Connected.')
+    with NetstringClient(host, port) as nsc:
+        print('Connected.')
+        while True:
+            data = nsc.receive_data()
+            print(data)
+            nsc.send_data(b'done')
 
-    #     data = nsc.receive_data()
-    #     print('Calibrating.')
-    #     nsc.send_data(b'calibrate done')
-
-    # print('Closed connection.')
+    print('Closed connection.')

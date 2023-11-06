@@ -1,16 +1,11 @@
 #include "mainwindow.h"
 #include "./ui_mainwindow.h"
-#include <QProcess>
 #include <QDebug>
-#include <QTcpServer>
-#include <QTcpSocket>
 #include <QMenuBar>
 #include <QFileDialog>
 
-void runServer() {
-    QTcpServer server;
-    QProcess process;
-    QString pythonScript = ".\\..\\client-driver\\client-driver.py";
+void MainWindow::startServer() {
+    QString pythonScript = ".\\..\\netstring-client\\netstring-client.py";
     process.startDetached("python", QStringList() << pythonScript);
     //process.startDetached(".\\..\\client-driver\\client-driver.py");
     if (!server.listen(QHostAddress::LocalHost, 12369)) {
@@ -20,21 +15,8 @@ void runServer() {
     qDebug() << "Server is listening on port 12369.";
 
     server.waitForNewConnection(-1);
-    QTcpSocket *client = server.nextPendingConnection();
+    client = server.nextPendingConnection();
     qDebug() << "Connected.";
-
-    while (true)
-    {
-        client->waitForReadyRead();
-        char data[16];
-        auto len = client->read(data, 16);
-        data[len] = '\0';
-        qDebug() << "Received data from client: " << data << len;
-        if (strcmp(data, "doneXXXXXXXXXXXX") == 0)
-        {
-            break;
-        }
-    }
 }
 
 MainWindow::MainWindow(QWidget *parent)
@@ -66,7 +48,7 @@ void MainWindow::executeStartCommand()
     QProcess process;
 
     // Set the Windows command to run (e.g., dir)
-    runServer();
+    startServer();
     process.start("cmd", QStringList() << "/c" << "dir");
 
     // Wait for the process to finish
@@ -125,6 +107,8 @@ void MainWindow::on_calibrateButton_clicked()
     // TODO - integrate calibrate functionality
     QString command = QString("calibrate --calibration-duration %1").arg(ui->calibrationDurationSlider->value());
     qDebug() << command;
+    sendData(command);
+    qDebug() << receiveData();
 
 }
 void MainWindow::on_calibrationDurationSlider_valueChanged(int value)
@@ -143,6 +127,8 @@ void MainWindow::on_actionOpen_Scan_from_Device_triggered()
         qDebug() << "Filepath not empty";
         QString command = QString("open --open-xyz %1").arg(filePath);
         qDebug() << command;
+        sendData(command);
+        qDebug() << receiveData();
     }
     else{
         qDebug() << "Filepath empty";
@@ -154,6 +140,8 @@ void MainWindow::on_scanButton_clicked()
 {
     QString command = QString("scan --scan-duration %1").arg(ui->scanDurationSlider->value());
     qDebug() << command;
+    sendData(command);
+    qDebug() << receiveData();
 }
 
 
@@ -187,5 +175,47 @@ void MainWindow::on_generateButton_clicked()
     command += " --save-as-xyz " + ui->xyzSaveInput->text();
 
     qDebug() << command;
+    sendData(command);
+    qDebug() << receiveData();
+}
+
+void MainWindow::sendData(const QString &str)
+{
+    QString netstring = QString::number(str.size()) + ":" + str + ",";
+    auto ba = netstring.toLocal8Bit();
+    client->write(ba.data());
+}
+
+QString MainWindow::receiveData()
+{
+    client->waitForReadyRead();
+
+    char c[1];
+    size_t length = 0;
+
+    while (true)
+    {
+        client->read(c, 1);
+        if (*c == ':')
+        {
+            break;
+        }
+        else
+        {
+            length = length * 10 + (*c - '0');
+        }
+    }
+
+    char data[1024];
+    int readLen = client->read(data, length);
+    data[readLen] = '\0';
+
+    // Remove comma
+    client->read(c, 1);
+
+    QString sdata(data);
+
+    qDebug() << "Received data from client: " << sdata;
+    return sdata;
 }
 
