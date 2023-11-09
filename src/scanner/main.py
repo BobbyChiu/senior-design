@@ -4,6 +4,8 @@ from Visualization import plot3d, showMesh
 import time
 import argparse
 import pathlib
+import numpy as np
+import open3d as o3d
 
 
 def do_calibration(lidar: Lidar, **kwargs) -> None:
@@ -19,7 +21,7 @@ def do_calibration(lidar: Lidar, **kwargs) -> None:
     lidar.calibrate_on_current()
 
 
-def do_scan(lidar: Lidar, **kwargs) -> None:
+def do_scan(lidar: Lidar, **kwargs):
     # Prepare for scanning
     print("10 Seconds till scanning. Place object on turntable.")
     time.sleep(10)
@@ -30,18 +32,32 @@ def do_scan(lidar: Lidar, **kwargs) -> None:
     time.sleep(scan_duration)
     lidar.stopScan()
 
-
-def do_processing_on_lidar(lidar: Lidar, **kwargs):
     if kwargs['remove_background']:
         lidar.remove_background_on_current()
-
+    
     pc = lidar.get3DPointCloud()
-
     plot3d(pc) # show point cloud
-
     return pc
 
+
 def do_processing_on_point_cloud(pc, **kwargs):
+    # filtering to remove outliers
+
+    # open3d statistical outlier remover
+    rrad_args = kwargs['remove_radius_outlier']
+    if rrad_args:
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pc)
+
+        # g statistical outlier removal
+        # cl, ind = pcd.remove_statistical_outlier(nb_neighbors=100, std_ratio=0.5)
+        # denoised_pcd = pcd.select_by_index(ind)
+        # radius outlier removal
+        cl, ind = pcd.remove_radius_outlier(nb_points=rrad_args['nb_points'], radius=rrad_args['radius'])
+        denoised_pcd = pcd.select_by_index(ind)
+
+        pc = np.asarray(denoised_pcd.points)   
+
     # filtering to remove outliers
     knn_args = kwargs['k_nn_thresholding']
     if knn_args:
@@ -50,7 +66,6 @@ def do_processing_on_point_cloud(pc, **kwargs):
             pc = pc[mask[:, 0]]
 
     # smoothening
-    pc = PointCloud.median_filter(pc, 25)
     gaussian_args = kwargs['gaussian']
     if gaussian_args:
         pc = PointCloud.gaussian_filter(pc, gaussian_args['k'], gaussian_args['sigma'])
@@ -58,18 +73,21 @@ def do_processing_on_point_cloud(pc, **kwargs):
     # make sure top and bottom are closed
     pc = PointCloud.fillFace(pc, bottom=True, top=True)
 
+    plot3d(pc) # show point cloud
     return pc
 
 
 def do_generate_mesh(pc, **kwargs):
     # generate mesh
     mesh = PointCloud.to_mesh(pc)
-    plot3d(pc) # show point cloud
     showMesh(mesh) # show mesh
 
     return mesh
 
+
 def do_generate_files(pc=None, lidar=None, mesh=None, **kwargs) -> None:
+    # TODO: Do something with kwargs['scaling']
+
     if pc:
         PointCloud.to_file(pc, filename=kwargs.get('save_as_xyz'))
 
@@ -89,26 +107,28 @@ if __name__ == '__main__':
     # Scan arguments
     scan_parser = argparse.ArgumentParser(add_help=False)
     scan_parser.add_argument('--scan-duration', type=float, help='scan duration in seconds', metavar='SECONDS')
+    scan_parser.add_argument('--remove-background', action='store_true', help='remove background points after scanning')
 
     # Open point cloud file arguments
     open_parser = argparse.ArgumentParser(add_help=False)
     open_parser.add_argument('--open-xyz', type=pathlib.Path, help='xyz point cloud file to open', metavar='XYZ_FILE')
 
     # Processing arguments
-    processing_parser = argparse.ArgumentParser(add_help=False)
-    processing_parser.add_argument('--remove-background', action='store_true', help='remove background points after scanning')
+    process_parser = argparse.ArgumentParser(add_help=False)
     # Filtering
-    processing_parser.add_argument('--k-nn-thresholding', nargs='*', help='apply sequential k-nearest neighbor filtering given by space-separated list of space-separated k and threshold', metavar='K THRESHOLD ')
+    process_parser.add_argument('--remove-radius-outlier', nargs=2, help='remove points with not enough neighbors given by a number of points and radius in centimeters', metavar=('NUMBER_OF_POINTS', 'RADIUS'))
+    process_parser.add_argument('--k-nn-thresholding', nargs='*', help='apply sequential k-nearest neighbor filtering given by space-separated list of space-separated k and threshold', metavar='K THRESHOLD ')
     # Smoothening
-    processing_parser.add_argument('--gaussian', nargs=2, help='apply gaussian filter given by space-separated k and sigma', metavar=('K', 'SIGMA'))
+    process_parser.add_argument('--gaussian', nargs=2, help='apply gaussian filter given by space-separated k and sigma', metavar=('K', 'SIGMA'))
 
     # Generation arguments
     generation_parser = argparse.ArgumentParser(add_help=False)
-    generation_parser.add_argument('--save-as-stl', nargs='?', default=pathlib.Path.cwd(), type=pathlib.Path, help='stl file to save to', metavar='STL_FILE')
-    generation_parser.add_argument('--save-as-xyz', nargs='?', default=pathlib.Path.cwd(), type=pathlib.Path, help='xyz file to save to', metavar='XYZ_FILE')
+    generation_parser.add_argument('--scaling', type=float, help='scaling factor on generated files')
+    generation_parser.add_argument('--save-as-stl', type=pathlib.Path, help='stl file to save to', metavar='STL_FILE')
+    generation_parser.add_argument('--save-as-xyz', type=pathlib.Path, help='xyz file to save to', metavar='XYZ_FILE')
 
-    parser = argparse.ArgumentParser(parents=[calibration_parser, scan_parser, open_parser, processing_parser, generation_parser])
-    actions = ['calibrate', 'scan', 'open', 'generate']
+    parser = argparse.ArgumentParser(parents=[calibration_parser, scan_parser, open_parser, process_parser, generation_parser])
+    actions = ['calibrate', 'scan', 'open', 'process', 'generate']
     parser.add_argument('do', choices=actions, help=f'action to take, {actions}', metavar='ACTION')
 
     def parse_arguments(arguments: list[str]) -> dict:
@@ -122,7 +142,15 @@ if __name__ == '__main__':
         elif args_dict['do'] == 'open':
             if not args_dict['open_xyz']:
                 raise KeyError('xyz file is required')
-        elif args_dict['do'] == 'generate':
+        elif args_dict['do'] == 'process':
+            # Remove radius outlier
+            rrad_args = args_dict['remove_radius_outlier']
+            if rrad_args:
+                args_dict['remove_radius_outlier'] = {
+                    'nb_points': int(rrad_args[0]),
+                    'radius': float(rrad_args[1]),
+                }
+
             # K-nn thresholding
             knn_args = args_dict['k_nn_thresholding']
             if knn_args:
@@ -150,28 +178,25 @@ if __name__ == '__main__':
 
     input_streamlike = [
         ['calibrate', '--calibration-duration', '5'],
-        ['scan', '--scan-duration', '30'],
+        ['scan', '--scan-duration', '30', '--remove-background'],
+        ['process',
+            '--remove-radius-outlier', '8', '0.25',
+            '--gaussian', '25', '4',
+        ],
         ['generate',
-            '--remove-background',
-            '--k-nn-thresholding',
-                '2', '0.4',
-                '3', '0.6',
-                '4', '0.8',
-                '5', '1.0',
-                '6', '1.2',
-                '7', '1.4',
-                '8', '1.6',
-                '9', '1.8',
-                '10', '2.0',
+            '--scaling', '1.0',
             '--save-as-stl', 'stl/first-sandia.xyz',
             '--save-as-xyz', 'lidar-data-xyz',
         ],
     ]
 
 
+    LIDAR_VERTICAL_SEPARATION = 15.722
     with Lidar('com3', dist_lim=(0,100), angle_lim=(0,180), angular_speed=30, dist_from_axis=30) as lidar:
+    #     with Lidar('com4', dist_lim=(0,50), angle_lim=(-45,45)) as lidar_top:
         # Keep state
-        pc = None
+        pc_raw = None
+        pc_processed = None
         mesh = None
 
         # while True:
@@ -188,50 +213,113 @@ if __name__ == '__main__':
             if arg_dict['do'] == 'calibrate':
                 do_calibration(lidar=lidar, **arg_dict)
             elif arg_dict['do'] == 'scan':
-                do_scan(lidar=lidar, **arg_dict)
+                pc_raw = do_scan(lidar=lidar, **arg_dict)
             elif arg_dict['do'] == 'open':
-                pc = PointCloud.from_file(arg_dict['open_xyz'])
+                pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
+            elif arg_dict['do'] == 'process':
+                pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
             elif arg_dict['do'] == 'generate':
-                pc = do_processing_on_lidar(lidar=lidar, **arg_dict)
-                pc = do_processing_on_point_cloud(pc=pc, **arg_dict)
+                mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
 
-                mesh = do_generate_mesh(pc, **arg_dict)
-
-                do_generate_files(pc=pc, lidar=lidar, mesh=mesh, **arg_dict)
+                do_generate_files(pc=pc_processed, lidar=lidar, mesh=mesh, **arg_dict)
         # Exit condition
 
 
-    # with Lidar('com3', dist_lim=(0,100), angle_lim=(0,180), angular_speed=30, dist_from_axis=30) as lidar:
-    #     def new_main():
-    #         # Calibrate
-    #         do_calibration(lidar=lidar)
+    # with Lidar('com3', dist_lim=(0,50), angle_lim=(-45,45)) as lidar_bottom:
+    #     with Lidar('com4', dist_lim=(0,50), angle_lim=(-45,45)) as lidar_top:
+    #         def new_main():
 
-    #         # Scanning
-    #         do_scan(lidar=lidar)
+    #             calibrate = input("Calibrate (y/n)? ") == "y"
+    #             if calibrate:
+    #                 # Calibrate
+    #                 lidar_bottom.set_lims(angle_lim=(0, 45))
+    #                 lidar_top.set_lims(angle_lim=(-15, 30))
+    #                 calibration_time = 10
+    #                 print(f"START CALIBRATION, DURATION: {calibration_time} s")
+    #                 lidar_bottom.startScan()
+    #                 lidar_top.startScan()
+    #                 time.sleep(calibration_time)
+    #                 lidar_top.stopScan()
+    #                 lidar_bottom.stopScan()
 
-    #         # Processing
-    #         pc = do_processing_on_lidar(lidar=lidar)
-    #         pc = do_processing_on_point_cloud(pc=pc)
+    #                 # apply angular, horizontal, and vertical biases
+    #                 horizontal_dist_top = lidar_top.calibrate_on_current()
+    #                 horizontal_dist_bottom = lidar_bottom.calibrate_on_current()
+    #                 horizontal_top_bias = horizontal_dist_bottom - horizontal_dist_top 
 
-    #         # Generate
-    #         mesh = do_generate_mesh(pc=pc)
-    #         do_generate_files(pc=pc, lidar=lidar, mesh=mesh)
+    #                 PointCloud.to_file((horizontal_top_bias, lidar_top.angular_bias, lidar_bottom.angular_bias),
+    #                                    folder="calibration", filename="calibration.data")
 
-    #     lidar.showPlot(new_main)
-    #     estimate_angular_speed(lidar.curr_scan[:,0], lidar.curr_scan[:, 2], show_plot=True)
+    #                 lidar_top.set_bias(horizontal=horizontal_top_bias, vertical=LIDAR_VERTICAL_SEPARATION)    
+    #                 input("Done calibration: press enter to continue")
+                
+    #             else:
+    #                 # read in calibration data
+    #                 calibration_data = PointCloud.from_file("calibration/calibration.data")
+    #                 lidar_top.set_bias(horizontal=calibration_data[0], vertical=LIDAR_VERTICAL_SEPARATION, angular=calibration_data[1])
+    #                 lidar_bottom.set_bias(angular=calibration_data[2])
+
+    #             # get background
+    #             background_collection_time = 10
+    #             print(f"START BACKGROUND COLLECTION, DURATION: {background_collection_time} s")
+    #             lidar_bottom.set_lims(angle_lim=(-15, 45))
+    #             lidar_top.set_lims(angle_lim=(-45, 0))
+    #             lidar_bottom.startScan()
+    #             lidar_top.startScan()
+    #             time.sleep(background_collection_time)
+    #             lidar_top.stopScan()
+    #             lidar_bottom.stopScan()
+    #             dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
+    #             lidar_top.set_current_to_background(estimate_params=False)
+    #             lidar_top.set_background_params(dist_from_axis, turntable_height)
+    #             input("Done getting background: press enter to start scanning")
+
+    #             # Scanning
+    #             scan_time = 120
+    #             print(f"START SCAN, DURATION: {scan_time} s")
+    #             start_time = time.time()
+    #             lidar_bottom.startScan(start_time)
+    #             lidar_top.startScan(start_time)
+    #             time.sleep(scan_time)
+    #             lidar_bottom.stopScan()
+    #             lidar_top.stopScan()
+
+    #             # Processing
+    #             lidar_top.remove_background_on_current()
+    #             lidar_bottom.remove_background_on_current()
+    #             angular_speed = estimate_angular_speed(lidar_bottom.curr_scan[:, 0], lidar_bottom.curr_scan[:, 2])
+    #             pc_top = lidar_top.get3DPointCloud(angular_speed=angular_speed)
+    #             pc_bottom = lidar_bottom.get3DPointCloud(angular_speed=angular_speed)
+    #             pc_final = np.vstack((pc_bottom, pc_top))
+    #             # save pc_final before processing
+    #             PointCloud.to_file(pc_final, folder="lidar-data-xyz")
+
+    #             plot3d(pc_top) # show point clouds
+    #             plot3d(pc_bottom)
+    #             pc_final = PointCloud.combine_point_clouds(pc_bottom, pc_top)
+    #             plot3d(pc_final)
+
+    #             # Filtering and smoothening
+    #             pc_final = post_processing(pc_final)
+    #             plot3d(pc_final)
+
+    #             # Generate Mesh
+    #             mesh = PointCloud.to_mesh(pc_final)
+    #             showMesh(mesh) # show mesh
+               
+    #             # save as stl file
+    #             PointCloud.mesh_to_stl(mesh, 'stl')
+
+            # lidar_bottom.showPlot(new_main)
+            # estimate_angular_speed(lidar.curr_scan[:,0], lidar.curr_scan[:, 2], show_plot=True)
 
 
-    # pc = PointCloud.from_file("lidar-data-xyz/george.xyz")
-    # plot3d(pc)
+    # pc = PointCloud.from_file("lidar-data-xyz/new_sandia.xyz")
+    # plot3d(pc) # show point cloud
+    # pc = post_processing(pc)
+    # plot3d(pc) # show point cloud
+    # mesh = PointCloud.to_mesh(pc) 
+    # showMesh(mesh) # show mesh
+    # save as stl file
+    # PointCloud.mesh_to_stl(mesh, 'stl')
 
-    # do_processing_on_point_cloud(pc)
-    # make sure top and bottom are closed
-    # pc = PointCloud.fillFace(pc, bottom=True, top=True)
-
-    # mesh = do_generate_mesh(pc)
-
-    # do_generate_files(mesh=mesh)
-    # PointCloud.mesh_to_stl(mesh, 'stl', 'wide_sandia.stl')
-
-    # scan = PointCloud.from_file("lidar-data-2d/20231015_133430.xyz")
-    # estimate_angular_speed(scan[:,0], scan[:, 2], show_plot=True)
