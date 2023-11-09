@@ -219,3 +219,40 @@ QString MainWindow::receiveData()
     return sdata;
 }
 
+
+void MainWindow::on_page2_clicked()
+{
+    ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(1);
+
+}
+
+
+void MainWindow::on_page3_clicked()
+{
+    ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(2);
+}
+
+
+void MainWindow::on_page4_clicked()
+{
+    ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(3);
+}
+
+
+void MainWindow::on_prev1_clicked()
+{
+    ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(0);
+}
+
+
+void MainWindow::on_prev2_clicked()
+{
+    ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(1);
+}
+
+
+void MainWindow::on_prev3_clicked()
+{
+    ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(2);
+}
+

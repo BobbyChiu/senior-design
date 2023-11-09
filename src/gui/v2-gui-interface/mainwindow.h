@@ -40,6 +40,18 @@ private slots:
 
     void on_generateButton_clicked();
 
+    void on_page2_clicked();
+
+    void on_page3_clicked();
+
+    void on_page4_clicked();
+
+    void on_prev1_clicked();
+
+    void on_prev2_clicked();
+
+    void on_prev3_clicked();
+
 private:
     void sendData(const QString &str);
 
