@@ -118,7 +118,7 @@
        </rect>
       </property>
       <property name="text">
-       <string>Calibration Duration (seconds): </string>
+       <string>Calibration Duration (sec): 30 </string>
       </property>
      </widget>
      <widget class="QSlider" name="calibrationDurationSlider">
@@ -130,8 +130,17 @@
         <height>16</height>
        </rect>
       </property>
+      <property name="value">
+       <number>30</number>
+      </property>
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
+      </property>
+      <property name="invertedAppearance">
+       <bool>false</bool>
+      </property>
+      <property name="invertedControls">
+       <bool>false</bool>
       </property>
      </widget>
      <widget class="QPushButton" name="openNotepadButton">
@@ -185,7 +194,7 @@
        </rect>
       </property>
       <property name="text">
-       <string>Scan Duration (seconds): 0</string>
+       <string>Scan Duration (sec): 60</string>
       </property>
      </widget>
      <widget class="QSlider" name="scanDurationSlider">
@@ -196,6 +205,9 @@
         <width>160</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="value">
+       <number>60</number>
       </property>
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
@@ -306,6 +318,9 @@
         <height>24</height>
        </rect>
       </property>
+      <property name="text">
+       <string>1</string>
+      </property>
      </widget>
      <widget class="QLineEdit" name="knnThresholdingInputs">
       <property name="geometry">
@@ -316,6 +331,9 @@
         <height>24</height>
        </rect>
       </property>
+      <property name="text">
+       <string>8, 0.5</string>
+      </property>
      </widget>
      <widget class="QLineEdit" name="meanInput">
       <property name="geometry">
@@ -325,6 +343,9 @@
         <width>113</width>
         <height>24</height>
        </rect>
+      </property>
+      <property name="text">
+       <string>9</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_4">
@@ -415,6 +436,9 @@
         <width>113</width>
         <height>24</height>
        </rect>
+      </property>
+      <property name="text">
+       <string>1</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_7">
