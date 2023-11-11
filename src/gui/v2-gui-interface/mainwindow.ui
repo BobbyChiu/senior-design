@@ -14,30 +14,17 @@
    <string>MainWindow</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <widget class="QLabel" name="sysCallOutput">
-    <property name="geometry">
-     <rect>
-      <x>30</x>
-      <y>260</y>
-      <width>721</width>
-      <height>271</height>
-     </rect>
-    </property>
-    <property name="text">
-     <string>SysCall TextLabel</string>
-    </property>
-   </widget>
    <widget class="QStackedWidget" name="stackedWidget">
     <property name="geometry">
      <rect>
       <x>0</x>
       <y>20</y>
       <width>801</width>
-      <height>531</height>
+      <height>301</height>
      </rect>
     </property>
     <property name="styleSheet">
-     <string notr="true">background-color: rgb(179, 180, 255);</string>
+     <string notr="true"/>
     </property>
     <property name="currentIndex">
      <number>0</number>

@@ -24,8 +24,6 @@ MainWindow::MainWindow(QWidget *parent)
     , ui(new Ui::MainWindow)
 {
     ui->setupUi(this);
-    // Connect the button's clicked() signal to a custom slot
-    QObject::connect(ui->startServerClient, &QPushButton::clicked, this, &MainWindow::executeStartCommand);
 
     connect(ui->scanDurationSlider, &QSlider::valueChanged, this, &MainWindow::on_horizontalSlider_valueChanged);
 
@@ -39,38 +37,6 @@ MainWindow::~MainWindow()
 {
     delete ui;
 }
-
-
-// Function for windows specific OS`
-void MainWindow::executeStartCommand()
-{
-    // Create a QProcess instance
-    QProcess process;
-
-    // Set the Windows command to run (e.g., dir)
-    startServer();
-    process.start("cmd", QStringList() << "/c" << "dir");
-
-    // Wait for the process to finish
-    if (process.waitForFinished() == true) {
-        // Read the output from the process
-        QString output = process.readAllStandardOutput();
-
-        if (output.isEmpty()) {
-            qDebug() << "No output from the command.";
-        } else {
-            qDebug() << "Command Output:\n" << output;
-            ui->sysCallOutput->setText(QString("System Call Output (Will be replaced once output is determined): %1").arg(output));
-        }
-    } else {
-        // Handle command execution error
-        qDebug() << "Error executing the command:" << process.errorString();
-    }
-}
-
-
-
-
 
 void MainWindow::on_horizontalSlider_valueChanged(int value)
 {

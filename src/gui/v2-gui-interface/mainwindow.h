@@ -21,7 +21,7 @@ public:
     void startServer();
 
 public slots:
-    void executeStartCommand();
+
 
 private slots:
     void on_horizontalSlider_valueChanged(int value);
