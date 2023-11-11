@@ -1,11 +1,13 @@
 import PointCloud
 from Lidar import Lidar, estimate_angular_speed
 from Visualization import plot3d, showMesh
+import ArgSource
 import time
 import argparse
 import pathlib
 import numpy as np
 import open3d as o3d
+from traceback import print_exc
 
 
 def do_calibration(lidar: Lidar, **kwargs) -> None:
@@ -34,7 +36,7 @@ def do_scan(lidar: Lidar, **kwargs):
 
     if kwargs['remove_background']:
         lidar.remove_background_on_current()
-    
+
     pc = lidar.get3DPointCloud()
     plot3d(pc) # show point cloud
     return pc
@@ -56,7 +58,7 @@ def do_processing_on_point_cloud(pc, **kwargs):
         cl, ind = pcd.remove_radius_outlier(nb_points=rrad_args['nb_points'], radius=rrad_args['radius'])
         denoised_pcd = pcd.select_by_index(ind)
 
-        pc = np.asarray(denoised_pcd.points)   
+        pc = np.asarray(denoised_pcd.points)
 
     # filtering to remove outliers
     knn_args = kwargs['k_nn_thresholding']
@@ -100,6 +102,10 @@ def do_generate_files(pc=None, lidar=None, mesh=None, **kwargs) -> None:
 
 
 if __name__ == '__main__':
+    launch_parser = argparse.ArgumentParser()
+    arg_sources = ['script', 'socket']
+    launch_parser.add_argument('--args-from', default='script', choices=arg_sources, help=f'how to run commands, {arg_sources}', metavar='TYPE')
+
     # Calibration arguments
     calibration_parser = argparse.ArgumentParser(add_help=False)
     calibration_parser.add_argument('--calibration-duration', type=float, help='calibration duration in seconds', metavar='SECONDS')
@@ -127,12 +133,14 @@ if __name__ == '__main__':
     generation_parser.add_argument('--save-as-stl', type=pathlib.Path, help='stl file to save to', metavar='STL_FILE')
     generation_parser.add_argument('--save-as-xyz', type=pathlib.Path, help='xyz file to save to', metavar='XYZ_FILE')
 
-    parser = argparse.ArgumentParser(parents=[calibration_parser, scan_parser, open_parser, process_parser, generation_parser])
-    actions = ['calibrate', 'scan', 'open', 'process', 'generate']
-    parser.add_argument('do', choices=actions, help=f'action to take, {actions}', metavar='ACTION')
+    parser = argparse.ArgumentParser(parents=[calibration_parser, scan_parser, open_parser, process_parser, generation_parser], exit_on_error=False)
+    actions = ['!help', 'calibrate', 'scan', 'open', 'process', 'generate', '!quit']
+    parser.add_argument('do', nargs='?', default='!help', choices=actions, help=f'action to take, {actions}', metavar='ACTION')
+    parser.add_argument('ignore', nargs='*', default=[], help='other positional arguments after the first are ignored')
 
     def parse_arguments(arguments: list[str]) -> dict:
-        args_dict = vars(parser.parse_args(arguments))
+        args_dict = vars(parser.parse_intermixed_args(arguments))
+        args_dict['do'] = args_dict['do']
         if args_dict['do'] == 'calibrate':
             if not args_dict['calibration_duration']:
                 raise KeyError('Calibration duration is required')
@@ -170,6 +178,7 @@ if __name__ == '__main__':
                     'sigma': float(gaussian_args[1]),
                 }
 
+        elif args_dict['do'] == 'generate':
             if not args_dict['save_as_stl'] and not args_dict['save_as_xyz']:
                 raise KeyError('Save file is required')
 
@@ -191,38 +200,61 @@ if __name__ == '__main__':
     ]
 
 
+    argsource: ArgSource.ArgSource = None
+    launch_ns = launch_parser.parse_args()
+    if launch_ns.args_from == 'script':
+        argsource = ArgSource.ScriptSource(input_streamlike)
+    elif launch_ns.args_from == 'socket':
+        argsource = ArgSource.SocketSource('localhost', 12369)
+
+
     LIDAR_VERTICAL_SEPARATION = 15.722
-    with Lidar('com3', dist_lim=(0,100), angle_lim=(0,180), angular_speed=30, dist_from_axis=30) as lidar:
+    with (
+        argsource,
+        Lidar('com3', dist_lim=(0,100), angle_lim=(0,180), angular_speed=30, dist_from_axis=30) as lidar,
+    ):
     #     with Lidar('com4', dist_lim=(0,50), angle_lim=(-45,45)) as lidar_top:
         # Keep state
         pc_raw = None
         pc_processed = None
         mesh = None
 
-        # while True:
-            # Receive input
-            # Do action
-            # Check exit condition
-            # pass
+        for arguments in argsource.command_generator():
+            output_string = ''
+            try:
+                # Receive input
+                arg_dict = parse_arguments(arguments)
 
-        for arguments in input_streamlike:
-            # Receive input
-            arg_dict = parse_arguments(arguments)
-
-            # Do action
-            if arg_dict['do'] == 'calibrate':
-                do_calibration(lidar=lidar, **arg_dict)
-            elif arg_dict['do'] == 'scan':
-                pc_raw = do_scan(lidar=lidar, **arg_dict)
-            elif arg_dict['do'] == 'open':
-                pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
-            elif arg_dict['do'] == 'process':
-                pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
-            elif arg_dict['do'] == 'generate':
-                mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
-
-                do_generate_files(pc=pc_processed, lidar=lidar, mesh=mesh, **arg_dict)
-        # Exit condition
+                # Do action
+                if arg_dict['do'] == '!help':
+                    output_string = parser.format_help()
+                elif arg_dict['do'] == 'calibrate':
+                    do_calibration(lidar=lidar, **arg_dict)
+                    output_string = 'Calibrate finished.'
+                elif arg_dict['do'] == 'scan':
+                    pc_raw = do_scan(lidar=lidar, **arg_dict)
+                    output_string = 'Scan finished.'
+                elif arg_dict['do'] == 'open':
+                    pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
+                    output_string = 'Open finished.'
+                elif arg_dict['do'] == 'process':
+                    pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
+                    output_string = 'Process finished.'
+                elif arg_dict['do'] == 'generate':
+                    mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
+                    do_generate_files(pc=pc_processed, lidar=lidar, mesh=mesh, **arg_dict)
+                    output_string = 'Generate finished.'
+                elif arg_dict['do'] == '!quit':
+                    # Exit condition
+                    output_string = '!quit'
+                    break
+                else:
+                    raise ValueError(f'unknown ACTION: {arg_dict["do"]}')
+            except Exception as e:
+                print_exc()
+                output_string = f'{str(e)}\nType "!help" for actions and arguments.\n'
+            finally:
+                argsource.output_string(output_string)
 
 
     # with Lidar('com3', dist_lim=(0,50), angle_lim=(-45,45)) as lidar_bottom:
@@ -245,14 +277,14 @@ if __name__ == '__main__':
     #                 # apply angular, horizontal, and vertical biases
     #                 horizontal_dist_top = lidar_top.calibrate_on_current()
     #                 horizontal_dist_bottom = lidar_bottom.calibrate_on_current()
-    #                 horizontal_top_bias = horizontal_dist_bottom - horizontal_dist_top 
+    #                 horizontal_top_bias = horizontal_dist_bottom - horizontal_dist_top
 
     #                 PointCloud.to_file((horizontal_top_bias, lidar_top.angular_bias, lidar_bottom.angular_bias),
     #                                    folder="calibration", filename="calibration.data")
 
-    #                 lidar_top.set_bias(horizontal=horizontal_top_bias, vertical=LIDAR_VERTICAL_SEPARATION)    
+    #                 lidar_top.set_bias(horizontal=horizontal_top_bias, vertical=LIDAR_VERTICAL_SEPARATION)
     #                 input("Done calibration: press enter to continue")
-                
+
     #             else:
     #                 # read in calibration data
     #                 calibration_data = PointCloud.from_file("calibration/calibration.data")
@@ -306,7 +338,7 @@ if __name__ == '__main__':
     #             # Generate Mesh
     #             mesh = PointCloud.to_mesh(pc_final)
     #             showMesh(mesh) # show mesh
-               
+
     #             # save as stl file
     #             PointCloud.mesh_to_stl(mesh, 'stl')
 
@@ -318,7 +350,7 @@ if __name__ == '__main__':
     # plot3d(pc) # show point cloud
     # pc = post_processing(pc)
     # plot3d(pc) # show point cloud
-    # mesh = PointCloud.to_mesh(pc) 
+    # mesh = PointCloud.to_mesh(pc)
     # showMesh(mesh) # show mesh
     # save as stl file
     # PointCloud.mesh_to_stl(mesh, 'stl')
