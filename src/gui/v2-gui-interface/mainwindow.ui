@@ -143,32 +143,6 @@
        <bool>false</bool>
       </property>
      </widget>
-     <widget class="QPushButton" name="openNotepadButton">
-      <property name="geometry">
-       <rect>
-        <x>530</x>
-        <y>200</y>
-        <width>161</width>
-        <height>24</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Launch Notepad</string>
-      </property>
-     </widget>
-     <widget class="QPushButton" name="startServerClient">
-      <property name="geometry">
-       <rect>
-        <x>550</x>
-        <y>160</y>
-        <width>120</width>
-        <height>24</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Start Server Client</string>
-      </property>
-     </widget>
     </widget>
     <widget class="QWidget" name="page_2">
      <widget class="QLabel" name="label_14">

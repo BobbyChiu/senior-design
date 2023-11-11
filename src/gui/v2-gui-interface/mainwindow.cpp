@@ -27,9 +27,6 @@ MainWindow::MainWindow(QWidget *parent)
 
     connect(ui->scanDurationSlider, &QSlider::valueChanged, this, &MainWindow::on_horizontalSlider_valueChanged);
 
-    // Connect the button's clicked() signal to the openNotepad() slot
-    connect(ui->openNotepadButton, &QPushButton::clicked, this, &MainWindow::on_openNotepadButton_clicked);
-
 
 }
 
