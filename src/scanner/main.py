@@ -354,4 +354,3 @@ if __name__ == '__main__':
     # showMesh(mesh) # show mesh
     # save as stl file
     # PointCloud.mesh_to_stl(mesh, 'stl')
-
