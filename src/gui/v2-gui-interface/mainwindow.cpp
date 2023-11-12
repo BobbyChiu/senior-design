@@ -3,10 +3,14 @@
 #include <QDebug>
 #include <QMenuBar>
 #include <QFileDialog>
+#include <QDir>
 
 void MainWindow::startServer() {
-    QString pythonScript = ".\\..\\netstring-client\\netstring-client.py";
-    process.startDetached("python", QStringList() << pythonScript);
+    //QString pythonScript = ".\\..\\netstring-client\\netstring-client.py";
+    QDir::setCurrent(".\\..\\..\\scanner");
+    QString run_scanner = "run_scanner.bat";
+    process.startDetached(run_scanner);
+    //process.startDetached("python", QStringList() << pythonScript);
     //process.startDetached(".\\..\\client-driver\\client-driver.py");
     if (!server.listen(QHostAddress::LocalHost, 12369)) {
         qDebug() << "Server could not start. Error: " << server.errorString();
