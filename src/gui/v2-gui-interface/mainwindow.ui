@@ -18,7 +18,7 @@
     <property name="geometry">
      <rect>
       <x>0</x>
-      <y>20</y>
+      <y>0</y>
       <width>801</width>
       <height>301</height>
      </rect>
@@ -34,7 +34,7 @@
       <property name="geometry">
        <rect>
         <x>710</x>
-        <y>200</y>
+        <y>210</y>
         <width>80</width>
         <height>24</height>
        </rect>
@@ -46,11 +46,16 @@
      <widget class="QLabel" name="label_11">
       <property name="geometry">
        <rect>
-        <x>270</x>
+        <x>279</x>
         <y>10</y>
-        <width>231</width>
+        <width>241</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
       </property>
       <property name="text">
        <string>Start a New Scan or Open an existing Scan</string>
@@ -65,6 +70,11 @@
         <height>16</height>
        </rect>
       </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
+      </property>
       <property name="text">
        <string>New Scan</string>
       </property>
@@ -73,7 +83,7 @@
       <property name="geometry">
        <rect>
         <x>420</x>
-        <y>30</y>
+        <y>50</y>
         <width>251</width>
         <height>16</height>
        </rect>
@@ -143,16 +153,39 @@
        <bool>false</bool>
       </property>
      </widget>
+     <widget class="QLabel" name="label_2">
+      <property name="geometry">
+       <rect>
+        <x>420</x>
+        <y>30</y>
+        <width>81</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="text">
+       <string>Existing Scan</string>
+      </property>
+     </widget>
     </widget>
     <widget class="QWidget" name="page_2">
      <widget class="QLabel" name="label_14">
       <property name="geometry">
        <rect>
-        <x>329</x>
+        <x>346</x>
         <y>10</y>
         <width>111</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
       </property>
       <property name="text">
        <string>Scan Configuration</string>
@@ -161,9 +194,9 @@
      <widget class="QLabel" name="label">
       <property name="geometry">
        <rect>
-        <x>180</x>
+        <x>340</x>
         <y>60</y>
-        <width>181</width>
+        <width>121</width>
         <height>20</height>
        </rect>
       </property>
@@ -174,7 +207,7 @@
      <widget class="QSlider" name="scanDurationSlider">
       <property name="geometry">
        <rect>
-        <x>180</x>
+        <x>322</x>
         <y>85</y>
         <width>160</width>
         <height>16</height>
@@ -193,8 +226,8 @@
      <widget class="QPushButton" name="scanButton">
       <property name="geometry">
        <rect>
-        <x>343</x>
-        <y>82</y>
+        <x>360</x>
+        <y>110</y>
         <width>80</width>
         <height>24</height>
        </rect>
@@ -219,7 +252,7 @@
      <widget class="QPushButton" name="prev1">
       <property name="geometry">
        <rect>
-        <x>0</x>
+        <x>10</x>
         <y>210</y>
         <width>80</width>
         <height>24</height>
@@ -234,11 +267,16 @@
      <widget class="QLabel" name="label_15">
       <property name="geometry">
        <rect>
-        <x>360</x>
+        <x>365</x>
         <y>10</y>
         <width>71</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
       </property>
       <property name="text">
        <string>Process Scan</string>
@@ -247,7 +285,7 @@
      <widget class="QLabel" name="label_6">
       <property name="geometry">
        <rect>
-        <x>264</x>
+        <x>416</x>
         <y>50</y>
         <width>111</width>
         <height>16</height>
@@ -260,7 +298,7 @@
      <widget class="QLabel" name="label_8">
       <property name="geometry">
        <rect>
-        <x>264</x>
+        <x>416</x>
         <y>80</y>
         <width>121</width>
         <height>16</height>
@@ -273,11 +311,16 @@
      <widget class="QLabel" name="label_3">
       <property name="geometry">
        <rect>
-        <x>25</x>
-        <y>32</y>
-        <width>91</width>
+        <x>165</x>
+        <y>29</y>
+        <width>101</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
       </property>
       <property name="text">
        <string>Filtering Options</string>
@@ -286,7 +329,7 @@
      <widget class="QLineEdit" name="stdDevInput">
       <property name="geometry">
        <rect>
-        <x>390</x>
+        <x>542</x>
         <y>80</y>
         <width>113</width>
         <height>24</height>
@@ -299,20 +342,20 @@
      <widget class="QLineEdit" name="knnThresholdingInputs">
       <property name="geometry">
        <rect>
-        <x>130</x>
-        <y>51</y>
+        <x>270</x>
+        <y>45</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>8, 0.5</string>
+       <string>8 0.5</string>
       </property>
      </widget>
      <widget class="QLineEdit" name="meanInput">
       <property name="geometry">
        <rect>
-        <x>391</x>
+        <x>543</x>
         <y>45</y>
         <width>113</width>
         <height>24</height>
@@ -325,8 +368,8 @@
      <widget class="QLabel" name="label_4">
       <property name="geometry">
        <rect>
-        <x>25</x>
-        <y>51</y>
+        <x>165</x>
+        <y>50</y>
         <width>101</width>
         <height>16</height>
        </rect>
@@ -338,11 +381,16 @@
      <widget class="QLabel" name="label_5">
       <property name="geometry">
        <rect>
-        <x>263</x>
+        <x>415</x>
         <y>30</y>
         <width>151</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
       </property>
       <property name="text">
        <string>Smoothening Options</string>
@@ -351,8 +399,8 @@
      <widget class="QCheckBox" name="checkBox">
       <property name="geometry">
        <rect>
-        <x>263</x>
-        <y>130</y>
+        <x>333</x>
+        <y>146</y>
         <width>131</width>
         <height>22</height>
        </rect>
@@ -365,7 +413,7 @@
       <property name="geometry">
        <rect>
         <x>710</x>
-        <y>250</y>
+        <y>210</y>
         <width>80</width>
         <height>24</height>
        </rect>
@@ -378,13 +426,26 @@
       <property name="geometry">
        <rect>
         <x>10</x>
-        <y>250</y>
+        <y>210</y>
         <width>80</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
        <string>Prev</string>
+      </property>
+     </widget>
+     <widget class="Line" name="line">
+      <property name="geometry">
+       <rect>
+        <x>389</x>
+        <y>30</y>
+        <width>20</width>
+        <height>111</height>
+       </rect>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
       </property>
      </widget>
     </widget>
@@ -398,6 +459,11 @@
         <height>16</height>
        </rect>
       </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
+      </property>
       <property name="text">
        <string>Generate 3D Model</string>
       </property>
@@ -405,8 +471,8 @@
      <widget class="QLineEdit" name="scalingInput">
       <property name="geometry">
        <rect>
-        <x>498</x>
-        <y>110</y>
+        <x>365</x>
+        <y>60</y>
         <width>113</width>
         <height>24</height>
        </rect>
@@ -418,8 +484,8 @@
      <widget class="QLabel" name="label_7">
       <property name="geometry">
        <rect>
-        <x>450</x>
-        <y>110</y>
+        <x>294</x>
+        <y>63</y>
         <width>49</width>
         <height>16</height>
        </rect>
@@ -431,8 +497,8 @@
      <widget class="QLineEdit" name="xyzSaveInput">
       <property name="geometry">
        <rect>
-        <x>510</x>
-        <y>180</y>
+        <x>365</x>
+        <y>130</y>
         <width>113</width>
         <height>24</height>
        </rect>
@@ -441,8 +507,8 @@
      <widget class="QLabel" name="label_10">
       <property name="geometry">
        <rect>
-        <x>436</x>
-        <y>180</y>
+        <x>292</x>
+        <y>134</y>
         <width>71</width>
         <height>16</height>
        </rect>
@@ -454,8 +520,8 @@
      <widget class="QLabel" name="label_9">
       <property name="geometry">
        <rect>
-        <x>436</x>
-        <y>150</y>
+        <x>293</x>
+        <y>100</y>
         <width>71</width>
         <height>16</height>
        </rect>
@@ -467,8 +533,8 @@
      <widget class="QLineEdit" name="stlSaveInput">
       <property name="geometry">
        <rect>
-        <x>510</x>
-        <y>147</y>
+        <x>365</x>
+        <y>97</y>
         <width>113</width>
         <height>24</height>
        </rect>
@@ -477,8 +543,8 @@
      <widget class="QPushButton" name="generateButton">
       <property name="geometry">
        <rect>
-        <x>680</x>
-        <y>180</y>
+        <x>710</x>
+        <y>210</y>
         <width>80</width>
         <height>24</height>
        </rect>
@@ -491,7 +557,7 @@
       <property name="geometry">
        <rect>
         <x>10</x>
-        <y>190</y>
+        <y>210</y>
         <width>80</width>
         <height>24</height>
        </rect>
