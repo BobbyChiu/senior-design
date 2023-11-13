@@ -25,10 +25,14 @@ def cylindrical2cart(r, theta, z):
 def from_file(path):
     return np.loadtxt(path)
 
-def to_file(pc, folder, filename=None):
+def to_file(pc, *, folder=None, filename=None):
     if filename == None:
         filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".xyz"
-    np.savetxt(f"{folder}/{filename}", pc, fmt="%f")
+
+    if folder:
+        np.savetxt(f"{folder}/{filename}", pc, fmt="%f")
+    else:
+        np.savetxt(f"{filename}", pc, fmt="%f")
 
 def rotation_matrix(yaw, pitch, roll):
     # Convert angles from degrees to radians
@@ -303,7 +307,9 @@ def fillFace(pc, density=10, num_points_from_edge=10, dist_from_edge=0.4, bottom
             all_new_theta = np.concatenate((all_new_theta, new_theta))
     if top:
         # top face
+        max_z = max_z
         for t in unique_theta:
+
             indices = np.where(theta == t)
             curr_max_z = np.max(z[indices])
             if np.abs(curr_max_z - max_z) > dist_from_edge:
@@ -312,7 +318,7 @@ def fillFace(pc, density=10, num_points_from_edge=10, dist_from_edge=0.4, bottom
             max_idx = np.argmax(z[indices])
             target_r = r[indices][max_idx]
 
-            new_r = np.random.ranf((density)) * target_r
+            new_r = (np.random.ranf(density)) * target_r
             new_z = np.full(new_r.shape, max_z)
             new_theta = np.full(new_r.shape, t)
 
@@ -499,7 +505,7 @@ def to_mesh(points_3d):
     mesh.paint_uniform_color([1, 0.706, 0])
     return mesh
 
-def mesh_to_stl(mesh, folder, filename=None):
+def mesh_to_stl(mesh, *, folder=None, filename=None):
     if filename == None:
         filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".stl"
     o3d.io.write_triangle_mesh(f"{folder}/{filename}", mesh)
