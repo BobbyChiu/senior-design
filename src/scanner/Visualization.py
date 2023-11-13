@@ -3,6 +3,7 @@ import plotly.graph_objs as go
 from matplotlib import pyplot as plt
 from matplotlib.animation import FuncAnimation
 import open3d as o3d
+import numpy as np
 
 # plot 3d points
 def plot3d(points_3d):
@@ -27,7 +28,7 @@ def plot3d(points_3d):
     # Render the plot
     plotly.offline.iplot(plot_figure)
 
-def plot2d_realtime(buffer_xy, type='vertical_slice', interval=50, xlim=(0, 50), ylim=(-25,25), callback=None):
+def plot2d_realtime(buffers, colors, interval=50, xlim=(0, 50), ylim=(-25,25)): 
     # plot
     fig, ax = plt.subplots()
     sc = ax.scatter([], [])
@@ -35,15 +36,29 @@ def plot2d_realtime(buffer_xy, type='vertical_slice', interval=50, xlim=(0, 50),
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
+    last_buffer_data = np.full(len(buffers), None)
     def consumerThread(frame):
+        # update buffer data
+        for i, (buffer, color) in enumerate(zip(buffers, colors)):
+            try:
+                new_data = buffer.get_nowait()
+                last_buffer_data[i] = (new_data[:,0], 
+                                       new_data[:,1], 
+                                       np.full(new_data.shape[0], color))
+            except Exception as e:
+                pass
+        # concatenate data from all buffers
+        x, y, c = ([], [], [])
+        for buffer_data in last_buffer_data:
+            if buffer_data is None:
+                continue
+            x = np.append(x, buffer_data[0])
+            y = np.append(y, buffer_data[1])
+            c = np.append(c, buffer_data[2])
+        # update plot
         try:
-            data_time_t = buffer_xy.get_nowait()
-            x = data_time_t[:,0]
-            y = data_time_t[:,1]
-            
             sc.set_offsets(list(zip(x, y)))
-        except Exception as e:
-            raise(e)
+            sc.set_color(c)
         finally:
             return sc
     
@@ -51,9 +66,6 @@ def plot2d_realtime(buffer_xy, type='vertical_slice', interval=50, xlim=(0, 50),
                         consumerThread,
                         interval=interval)
     plt.show() # loops until q is pressed
-
-    if callback != None:
-        callback()
     
 def showMesh(mesh):
     o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True, mesh_show_back_face=True)

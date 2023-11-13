@@ -1,8 +1,11 @@
 import numpy as np
 from datetime import datetime
 from scipy.spatial import cKDTree, KDTree
+from scipy.spatial.distance import cdist
+import scipy.signal
 import open3d as o3d
 from sklearn.linear_model import RANSACRegressor
+from sklearn.neighbors import NearestNeighbors
 
 # converts 2d polar (in degrees) to 2d cartesian
 def pol2cart(radius, angle):
@@ -26,6 +29,43 @@ def to_file(pc, folder, filename=None):
     if filename == None:
         filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".xyz"
     np.savetxt(f"{folder}/{filename}", pc, fmt="%f")
+
+def rotation_matrix(yaw, pitch, roll):
+    # Convert angles from degrees to radians
+    yaw = np.radians(yaw)
+    pitch = np.radians(pitch)
+    roll = np.radians(roll)
+
+    # Yaw rotation matrix around the z-axis
+    Rz = np.array([
+        [np.cos(yaw), -np.sin(yaw), 0],
+        [np.sin(yaw), np.cos(yaw), 0],
+        [0, 0, 1]
+    ])
+
+    # Pitch rotation matrix around the y-axis
+    Ry = np.array([
+        [np.cos(pitch), 0, np.sin(pitch)],
+        [0, 1, 0],
+        [-np.sin(pitch), 0, np.cos(pitch)]
+    ])
+
+    # Roll rotation matrix around the x-axis
+    Rx = np.array([
+        [1, 0, 0],
+        [0, np.cos(roll), -np.sin(roll)],
+        [0, np.sin(roll), np.cos(roll)]
+    ])
+
+    # Combined rotation matrix
+    R = np.dot(Rz, np.dot(Ry, Rx))
+    return R
+
+def rotate_points(yaw, pitch, roll, points):
+    R = rotation_matrix(yaw, pitch, roll)
+    # Apply rotation to each point
+    transformed_points = np.dot(points, R.T)
+    return transformed_points
 
 def subtract_point_clouds(cloud1, cloud2, threshold):
     """
@@ -58,7 +98,7 @@ def knn_filter(cloud1, k, threshold):
     numpy.ndarray: The mask of resulting point cloud after subtraction.
     """
     tree = cKDTree(cloud1)
-    distances, indices = tree.query(cloud1, k=[k])  # Find the nearest point in cloud2 for each point in cloud1
+    distances, indices = tree.query(cloud1, k=k)  # Find the nearest point in cloud2 for each point in cloud1
     mask = distances < threshold  # Create a mask of points that are closer then the threshold
     return mask
 
@@ -88,7 +128,7 @@ def median_filter(points, k):
 
     return filtered_points
 
-def gaussian_filter(points, k, sigma):
+def gaussian_filter_knn(points, k, sigma):
     """
     Apply a Gaussian filter to a 3D point cloud based on k nearest neighbors.
 
@@ -123,8 +163,105 @@ def gaussian_filter(points, k, sigma):
 
     return filtered_points
 
+def estimate_normals(points, radius):
+    """
+    Estimate normals for each point in the point cloud using PCA on neighbors within a specified radius.
+    This version uses a radius-based approach instead of k-nearest neighbors for normal estimation.
+    Handles cases where there are not enough neighbors to compute a covariance matrix.
+    """
+    tree = cKDTree(points)
+    normals = np.zeros_like(points)
+
+    for i, point in enumerate(points):
+        idx = tree.query_ball_point(point, radius)
+        neighbors = points[idx]
+
+        # Check if there are enough neighbors to compute the covariance matrix
+        if len(neighbors) < 3:
+            # Not enough neighbors, assign a default normal or skip
+            normals[i] = np.array([0, 0, 1])  # Example default normal
+        else:
+            cov_matrix = np.cov(neighbors - point, rowvar=False)
+            eigenvalues, eigenvectors = np.linalg.eigh(cov_matrix)
+            normal = eigenvectors[:, np.argmin(eigenvalues)]
+            normals[i] = normal if normal[2] > 0 else -normal
+
+    return normals
+
+def bilateral_filter_point_cloud(points, normals, radius, sigma_s, sigma_n):
+    """
+    Apply a bilateral filter to a point cloud using a k-d tree for spatial searching.
+    Only points within a specified radius are considered for computing the filter response.
+    
+    points: A numpy array of shape (N, 3) representing the point cloud.
+    normals: A numpy array of shape (N, 3) representing the estimated normals for the point cloud.
+    sigma_s: The spatial standard deviation of the Gaussian.
+    sigma_n: The standard deviation for the normals in the Gaussian range component.
+    radius: The radius within which to evaluate nearest neighbors for filtering.
+    
+    Returns a filtered point cloud of the same shape as points.
+    """
+    tree = cKDTree(points)
+    filtered_points = np.zeros_like(points)
+
+    for i, point in enumerate(points):
+        # Find points within the specified radius for spatial component
+        idx = tree.query_ball_point(point, radius)
+        neighbors = points[idx]
+        neighbor_normals = normals[idx]
+        
+        # Compute spatial weights
+        spatial_weights = np.exp(-cdist([point], neighbors, 'sqeuclidean')[0] / (2 * sigma_s**2))
+        
+        # Compute normal weights
+        normal_differences = 1 - np.abs(np.einsum('ij,j->i', neighbor_normals, normals[i]))
+        # normal_differences = -(np.log(1-normal_differences))
+        normal_weights = np.exp(-(normal_differences**2) / (2 * sigma_n**2))
+        
+        # Combine weights
+        weights = spatial_weights * normal_weights
+        
+        # Normalize weights
+        weights /= weights.sum()
+        
+        # Calculate the filtered point
+        filtered_points[i] = np.dot(weights, neighbors)
+    
+    return filtered_points
+
+def gaussian_filter_radius(points, radius, sigma):
+    """
+    Apply a Gaussian filter to a point cloud.
+
+    Parameters:
+    - points (np.array): Nx3 array of the point cloud data.
+    - sigma (float): Standard deviation for Gaussian kernel.
+    - radius (float): Radius to consider for the neighborhood points.
+
+    Returns:
+    - np.array: Filtered point cloud of the same shape as input.
+    """
+    # Create a KDTree for fast neighborhood lookup
+    kdtree = cKDTree(points)
+
+    # Find points within the specified radius
+    indices = kdtree.query_ball_tree(kdtree, r=radius)
+
+    # Apply Gaussian filter
+    filtered_points = np.zeros_like(points)
+    for i, point_indices in enumerate(indices):
+        if not point_indices:
+            continue
+        neighbors = points[point_indices]
+        distances = np.linalg.norm(neighbors - points[i], axis=1)
+        weights = np.exp(-(distances**2) / (2 * sigma**2))
+        weights /= weights.sum()
+        filtered_points[i] = np.sum(neighbors * weights[:, np.newaxis], axis=0)
+
+    return filtered_points
+
 # adds points to make the bottom/top of the point cloud flat
-def fillFace(pc, bottom=False, top=False):
+def fillFace(pc, density=10, num_points_from_edge=10, dist_from_edge=0.4, bottom=False, top=False):
 
     # get cylindrical coordinates
     x = pc[:,0]
@@ -135,12 +272,12 @@ def fillFace(pc, bottom=False, top=False):
     unique_theta = np.unique(theta)
 
     # get min z 
-    min_idx = np.argpartition(z, 10)
-    min_z = np.median(z[min_idx[:10]])
+    min_idx = np.argpartition(z, num_points_from_edge)
+    min_z = np.median(z[min_idx[:num_points_from_edge]])
 
     # get max z
-    max_idx = np.argpartition(z, -10)
-    max_z = np.median(z[max_idx[-10]])
+    max_idx = np.argpartition(z, -num_points_from_edge)
+    max_z = np.median(z[max_idx[-num_points_from_edge]])
 
     # fill in points on plane of min_z
     all_new_r = np.empty(0)
@@ -152,12 +289,12 @@ def fillFace(pc, bottom=False, top=False):
         for t in unique_theta:
             indices = np.where(theta == t)
             curr_min_z = np.max(z[indices])
-            if np.abs(curr_min_z - min_z) > 0.4:
+            if np.abs(curr_min_z - min_z) > dist_from_edge:
                 continue
             min_idx = np.argmin(z[indices])
             target_r = r[indices][min_idx]
 
-            new_r = np.random.ranf((10)) * target_r
+            new_r = np.random.ranf((density)) * target_r
             new_z = np.full(new_r.shape, min_z)
             new_theta = np.full(new_r.shape, t)
 
@@ -169,13 +306,13 @@ def fillFace(pc, bottom=False, top=False):
         for t in unique_theta:
             indices = np.where(theta == t)
             curr_max_z = np.max(z[indices])
-            if np.abs(curr_max_z - max_z) > 0.4:
+            if np.abs(curr_max_z - max_z) > dist_from_edge:
                 continue
 
             max_idx = np.argmax(z[indices])
             target_r = r[indices][max_idx]
 
-            new_r = np.random.ranf((10)) * target_r
+            new_r = np.random.ranf((density)) * target_r
             new_z = np.full(new_r.shape, max_z)
             new_theta = np.full(new_r.shape, t)
 
@@ -295,12 +432,16 @@ def icp(A, B, init_pose=None, max_iterations=20, tolerance=0.001):
         if np.abs(prev_error - mean_error) < tolerance:
             break
         prev_error = mean_error
-
     # Calculate final transformation
     T,_,_ = best_fit_transform(A, src[:3,:].T)
 
     return T, distances, i+1
 
+def apply_icp_transform(A, T):
+     # Transform source points
+    homogenous_coordinates = np.hstack((A, np.ones((A.shape[0], 1))))
+    transformed_A = (T @ homogenous_coordinates.T).T[:, :3]
+    return transformed_A
 
 def combine_point_clouds(A, B):
     """
@@ -316,15 +457,26 @@ def combine_point_clouds(A, B):
     """
 
     T = icp(A, B)[0]
-
-    # Transform source points
-    homogenous_coordinates = np.hstack((A, np.ones((A.shape[0], 1))))
-    transformed_A = (T @ homogenous_coordinates.T).T[:, :3]
+    transformed_A = apply_icp_transform(A, T)
 
     # Concatenate with target points
     combined = np.vstack((transformed_A, B))
-
     return combined
+
+def chamfer_distance(point_cloud_a, point_cloud_b):
+    # Create KD-Trees
+    tree_a = cKDTree(point_cloud_a)
+    tree_b = cKDTree(point_cloud_b)
+
+    # Find the closest points and distances from A to B
+    distances_a_to_b, _ = tree_a.query(point_cloud_b)
+    distances_b_to_a, _ = tree_b.query(point_cloud_a)
+
+    # Compute the Chamfer Distance
+    chamfer_a_to_b = np.mean(np.square(distances_a_to_b))
+    chamfer_b_to_a = np.mean(np.square(distances_b_to_a))
+
+    return chamfer_a_to_b + chamfer_b_to_a
 
 
 def to_mesh(points_3d):
@@ -351,3 +503,12 @@ def mesh_to_stl(mesh, folder, filename=None):
     if filename == None:
         filename = datetime.now().strftime("%Y%m%d_%H%M%S") + ".stl"
     o3d.io.write_triangle_mesh(f"{folder}/{filename}", mesh)
+
+def stl_to_mesh(filename):
+    mesh = o3d.io.read_triangle_mesh(filename)
+    return mesh
+
+def mesh_to_pc(mesh, num_samples=100000):
+    pc = mesh.sample_points_uniformly(number_of_points=num_samples)
+    pc = np.asarray(pc.points)
+    return pc
