@@ -42,7 +42,7 @@ MainWindow::~MainWindow()
 void MainWindow::on_horizontalSlider_valueChanged(int value)
 {
     //qDebug() << "Slider Value Changed:" << value;
-    ui->label->setText(QString("Scan Duration (seconds): %1").arg(value));
+    ui->label->setText(QString("Scan Duration (sec): %1").arg(value));
 }
 
 
@@ -80,7 +80,7 @@ void MainWindow::on_calibrateButton_clicked()
 }
 void MainWindow::on_calibrationDurationSlider_valueChanged(int value)
 {
-    ui->calibrationDurationLabel->setText(QString("Calibration Duration (seconds): %1").arg(value));
+    ui->calibrationDurationLabel->setText(QString("Calibration Duration (sec): %1").arg(value));
 }
 
 
@@ -96,6 +96,7 @@ void MainWindow::on_actionOpen_Scan_from_Device_triggered()
         qDebug() << command;
         sendData(command);
         qDebug() << receiveData();
+        ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(2);
     }
     else{
         qDebug() << "Filepath empty";
