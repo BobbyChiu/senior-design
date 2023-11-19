@@ -52,6 +52,8 @@ private slots:
 
     void on_prev3_clicked();
 
+    void on_processScanButton_clicked();
+
 private:
     void sendData(const QString &str);
 

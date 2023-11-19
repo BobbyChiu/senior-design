@@ -125,17 +125,6 @@ void MainWindow::on_generateButton_clicked()
 {
     QString command("generate");
 
-    if (ui->checkBox->isChecked())
-    {
-        command += " --remove-background";
-    }
-
-    command += " --k-nn-thresholding " + ui->knnThresholdingInputs->text();
-
-    // TODO: Find a way to make this optional?
-    command += " --gaussian " + ui->meanInput->text() + " " + ui->stdDevInput->text();
-
-
     command += " --scaling " + ui->scalingInput->text();
 
     command += " --save-as-stl " + ui->stlSaveInput->text();
@@ -221,5 +210,25 @@ void MainWindow::on_prev2_clicked()
 void MainWindow::on_prev3_clicked()
 {
     ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(2);
+}
+
+
+void MainWindow::on_processScanButton_clicked()
+{
+    QString command("process");
+
+    if (ui->checkBox->isChecked())
+    {
+        command += " --remove-background";
+    }
+
+    command += " --k-nn-thresholding " + ui->knnThresholdingInputs->text();
+
+    // TODO: Find a way to make this optional?
+    command += " --gaussian " + ui->meanInput->text() + " " + ui->stdDevInput->text();
+
+    qDebug() << command;
+    sendData(command);
+    qDebug() << receiveData();
 }
 
