@@ -11,6 +11,7 @@ from scipy.interpolate import interp1d
 from serial.serialutil import SerialTimeoutException
 from sklearn.decomposition import PCA
 import open3d as o3d
+import serial.tools.list_ports
 
 def start_stop_scan(lidars, scan_time):
     start_time = time.time()
@@ -33,6 +34,40 @@ def calibrate(lidar_top, lidar_bottom, initial_guess, ref_obj):
     bottom_params = optimized_params[6:12]
     lidar_bottom.set_params(bottom_params)
     return optimized_params, pc_top_cal, pc_bottom_cal
+
+def auto_get_lidars(top_dist_lim, top_ang_lim, bot_dist_lim, bot_ang_lim):
+    ports = serial.tools.list_ports.comports()
+
+    lidar_ports = []
+    for port, desc, hwid in sorted(ports):
+        if "Silicon Labs CP210x" in desc:
+            lidar_ports.append(port)
+
+    if len(lidar_ports) < 2:
+        raise ValueError("Less than two lidar ports found.")
+
+    lidar1 = Lidar(lidar_ports[0], dist_lim=(0, 50), angle_lim=(-90, -60))
+    lidar2 = Lidar(lidar_ports[1], dist_lim=(0, 50), angle_lim=(-90, -60))
+
+    # Assuming Lidar.startScan(), Lidar.stopScan(), Lidar.get3DPointCloud(), and Lidar.disconnect() are defined elsewhere
+    lidar1.startScan()
+    lidar2.startScan()
+    time.sleep(2)
+    lidar1.stopScan()
+    lidar2.stopScan()
+
+    pc1 = lidar1.get3DPointCloud(angular_speed=0)
+    pc2 = lidar2.get3DPointCloud(angular_speed=0)
+
+    mean1 = np.nanmean(pc1[:, 2]) if np.any(np.isfinite(pc1[:, 2])) else float('inf')
+    mean2 = np.nanmean(pc2[:, 2]) if np.any(np.isfinite(pc2[:, 2])) else float('inf')
+
+    lidar_top, lidar_bottom = (lidar1, lidar2) if mean1 <= mean2 else (lidar2, lidar1)
+
+    lidar_top.set_lims(top_dist_lim, top_ang_lim)
+    lidar_bottom.set_lims(bot_dist_lim, bot_ang_lim)
+
+    return (lidar_top, lidar_bottom)
 
 # convert lidar scan data (dist, angle from z axis, time) to x, y, z
 # angular speed in degrees per second

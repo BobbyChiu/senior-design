@@ -1,5 +1,5 @@
 import PointCloud
-from Lidar import Lidar, estimate_angular_speed, lidar2d_to_3d, calibrate_lidars, start_stop_scan, calibrate
+from Lidar import Lidar, start_stop_scan, calibrate, auto_get_lidars
 from Visualization import plot3d, showMesh, plot2d_realtime, plot_dual_3d_clouds
 import ArgSource
 import time
@@ -295,10 +295,12 @@ if __name__ == '__main__':
     if launch_ns.args_from == 'script':
         argsource = ArgSource.ScriptSource(input_streamlike)
     elif launch_ns.args_from == 'socket':
-        argsource = ArgSource.SocketSource('localhost', 12369)
+        argsource = ArgSource.SocketSource('localhost', 12369
+        )
 
-    lidar_bottom = Lidar('COM4', dist_lim=(10,50), angle_lim=(-20,45))
-    lidar_top = Lidar('COM3', dist_lim=(10,50), angle_lim=(-45,0))
+    
+    lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-45, 0),
+                                              (10, 50), (-20, 45))
     try:
         with argsource:
             def process_commands():
