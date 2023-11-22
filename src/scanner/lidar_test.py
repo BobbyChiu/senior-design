@@ -1,10 +1,13 @@
-from rplidar import RPLidar
+from rplidar_new import RPLidar
 import logging
 import threading
+import time
+import serial 
+import subprocess  
+import shlex
 
-# logging.basicConfig(level=logging.DEBUG)
-lidar_bottom = RPLidar('COM3')
-lidar_top = RPLidar('COM4')
+lidar_bottom = RPLidar('COM3', baudrate=115200, timeout=1)
+lidar_top = RPLidar('COM4', baudrate=115200, timeout=1)
 lidars = [lidar_top, lidar_bottom]
 
 for lidar in lidars:

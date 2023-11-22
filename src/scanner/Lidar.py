@@ -1,6 +1,6 @@
 import numpy as np
 from queue import Queue
-from rplidar import RPLidar, MAX_MOTOR_PWM
+from rplidar_new import RPLidar, MAX_MOTOR_PWM
 import time
 import threading
 import Visualization
@@ -310,55 +310,52 @@ class Lidar():
         print(health)
         self.scan_generator = self.lidar.iter_scans('express')
 
-        # Start background thread to stream data from lidar
+        # start lidar scanning thread
         self.kill_thread = False
         self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
         self.scan_thread.start()
 
     def _scan_thread(self):
-        try:
-            """Background thread that samples from the lidar.
-            If self.scanning is true, then self.curr_scan contains raw lidar data.
-            This thread can be killed by setting self.kill_thread to true.
-            """
-            for scan in self.scan_generator:
-                # add data to plotting queue
-                scan_time = time.time()
-                scan = np.array(scan).astype('float')
+        """Background thread that samples from the lidar.
+        If self.scanning is true, then self.curr_scan contains raw lidar data.
+        This thread can be killed by setting self.kill_thread to true.
+        """
+        for scan in self.scan_generator:
+            # add data to plotting queue
+            scan_time = time.time()
+            scan = np.array(scan).astype('float')
 
-                if len(scan.shape) > 2:
-                    scan = np.reshape(scan, (scan.shape[0] * scan.shape[1], scan.shape[2]))
+            if len(scan.shape) > 2:
+                scan = np.reshape(scan, (scan.shape[0] * scan.shape[1], scan.shape[2]))
 
-                # scan = scan[(scan[:, 0] == 15)]  # remove noisy points
-                scan = scan[:, [2, 1]] # get data as [dist, angle]
-                scan[:, 0] = scan[:, 0]/10 # convert from mm to cm
+            # scan = scan[(scan[:, 0] == 15)]  # remove noisy points
+            scan = scan[:, [2, 1]] # get data as [dist, angle]
+            scan[:, 0] = scan[:, 0]/10 # convert from mm to cm
 
-                # apply angular bias
-                scan[:, 1] = scan[:, 1] + 180  # convert angles so that 0 degrees is the z axis 
-                scan[:, 1][(scan[:, 1] > 180)] -= 360 
-                
-                # filter
-                scan = scan[(scan[:, 0] > self.min_dist) & (scan[:,0] < self.max_dist)]
-                scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
+            # apply angular bias
+            scan[:, 1] = scan[:, 1] + 180  # convert angles so that 0 degrees is the z axis 
+            scan[:, 1][(scan[:, 1] > 180)] -= 360 
+            
+            # filter
+            scan = scan[(scan[:, 0] > self.min_dist) & (scan[:,0] < self.max_dist)]
+            scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
 
-                # apply horizontal and vertical bias
+            # apply horizontal and vertical bias
+            x, y = PointCloud.pol2cart(scan[:, 0], scan[:, 1])
+            scan[:, 0], scan[:, 1] = PointCloud.cart2pol(x, y)
+
+            if self.user_request_data:
                 x, y = PointCloud.pol2cart(scan[:, 0], scan[:, 1])
-                scan[:, 0], scan[:, 1] = PointCloud.cart2pol(x, y)
+                self.buffer.put(np.column_stack((x, y)))
 
-                if self.user_request_data:
-                    x, y = PointCloud.pol2cart(scan[:, 0], scan[:, 1])
-                    self.buffer.put(np.column_stack((x, y)))
+            # update cumulative scanning data
+            if self.scanning:
+                data_point_time = 0.00 * (scan[:, 1]/360) + (scan_time) - self.start_scan_time 
+                scan_with_time = np.column_stack((scan, data_point_time)) # add third coordinate: time
+                self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
 
-                # update cumulative scanning data
-                if self.scanning:
-                    data_point_time = 0.00 * (scan[:, 1]/360) + (scan_time) - self.start_scan_time 
-                    scan_with_time = np.column_stack((scan, data_point_time)) # add third coordinate: time
-                    self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
-
-                if self.kill_thread:
-                    return
-        finally:
-            self.disconnect()
+            if self.kill_thread:
+                return
 
     def startScan(self, start_time=None):
         """Start a new scan, clearing previous scan data.
@@ -547,7 +544,8 @@ class Lidar():
     def disconnect(self):
         """Stop and disconnect the lidar.
         """
-
+        self.kill_thread = True
+        self.scan_thread.join()
         self.lidar.stop()
         self.lidar.stop_motor()
         self.lidar.disconnect()
@@ -561,7 +559,7 @@ class Lidar():
         self.scan_thread.start()
         return self
 
-    def __exit__(self, exc_type, exc_value, traceback):
+    # def __exit__(self, exc_type, exc_value, traceback):
         """Attempt to kill the background thread. Also try to disconnect the lidar.
         """
 
