@@ -1,5 +1,5 @@
 import PointCloud
-from Lidar import Lidar, estimate_angular_speed, lidar2d_to_3d, calibrate_lidars, start_stop_scan, calibrate
+from Lidar import Lidar, estimate_angular_speed, lidar2d_to_3d, calibrate_lidars, start_stop_scan, calibrate, calibrate_no_ref
 from Visualization import plot3d, showMesh, plot2d_realtime, plot_dual_3d_clouds
 import ArgSource
 import time
@@ -10,23 +10,11 @@ import open3d as o3d
 from traceback import print_exc
 import threading
 from main import do_processing_on_point_cloud
+from scipy.optimize import minimize
 
 LIDAR_VERTICAL_SEPARATION = 15.722
 
-def post_processing(pc, knn=None):
-    # filtering to remove outliers
-    # open3d statistical outlier remover
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(pc)
-
-    # # g statistical outlier removal
-    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=100, std_ratio=2)
-    pcd = pcd.select_by_index(ind)
-    # radius outlier removal
-    cl, ind = pcd.remove_radius_outlier(nb_points=5, radius=0.25)
-    pcd = pcd.select_by_index(ind)
-
-    pc = np.asarray(pcd.points)
+def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params=(20, 2)):
 
     # filtering to remove outliers
     if knn:
@@ -35,73 +23,131 @@ def post_processing(pc, knn=None):
             pc = pc[mask[:, 0]]
 
     # smoothening
-    pc = PointCloud.gaussian_filter_radius(pc, 0.1, 1)
-    estimated_normals = PointCloud.estimate_normals(pc, radius=0.5)
-    pc = PointCloud.bilateral_filter_point_cloud(pc, 
-                                                estimated_normals, 
-                                                radius=0.5, 
-                                                sigma_s=1, 
-                                                sigma_n=0.001)   
-                                                    
+    # pc = PointCloud.gaussian_filter_radius(pc, 1, 1)
+    # estimated_normals = PointCloud.estimate_normals(pc, radius=10)
+    # pc = PointCloud.bilateral_filter_point_cloud(pc, 
+    #                                             estimated_normals, 
+    #                                             radius=10, 
+    #                                             sigma_s=1, 
+    #                                             sigma_n=0.1) 
 
-    # make sure top and bottom are closed
-    num_points = pc.shape[0]
-    vertical_range = pc[:, 2].max() - pc[:, 2].min()
-    pc = PointCloud.fillFace(pc, 
-                            density=20, num_points_from_edge=int(num_points/200), dist_from_edge=vertical_range/30, 
-                            bottom=True, top=True)
 
-    plot3d(pc) # show point cloud
-    # estimated_normals = PointCloud.estimate_normals(pc, radius=0.5)
-    # pc = PointCloud.bilateral_filter_point_cloud(pc, estimated_normals, 
-    #                                              radius=0.5, sigma_s=0.1, sigma_n=0.1)
+    pc = PointCloud.get_surface_points(pc, voxel_size=0.5)
+                                                
+    # open3d outlier remover
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pc)
+    # statistical outlier removal
+    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=stat_out_rem_params[0], 
+                                             std_ratio=stat_out_rem_params[1])
+    pcd = pcd.select_by_index(ind)
+    # # radius outlier removal
+    # cl, ind = pcd.remove_radius_outlier(nb_points=rad_out_rem_params[0],
+    #                                     radius=rad_out_rem_params[1])
+    # pcd = pcd.select_by_index(ind)
+    pc = np.asarray(pcd.points)
+
+    # add flat bottom surface
+    pc = PointCloud.add_bottom_surface(pc, 
+                                       z_percentile=1, 
+                                       percent_height=10, 
+                                       grid_spacing=0.5, 
+                                       crop=True)
+    
+    # optional: add flat top surface
+    pc[:, 2] = - pc[:, 2]
+    pc = PointCloud.add_bottom_surface(pc, 
+                                       z_percentile=1,
+                                       percent_height=1,
+                                       grid_spacing=0.5,
+                                       crop=True)
+    
+    pc[:, 2] = - pc[:, 2]
     return pc
 
-# top = PointCloud.from_file("lidar-data-2d/sandia-test.xyz")
-# estimate_angular_speed(top, show_plot=True)
+def self_aligned_scan(top, bottom):
+    angular_speed_top = estimate_angular_speed(top)
+    angular_speed_bottom = estimate_angular_speed(bottom)
 
-bottom = PointCloud.from_file("calibration/ref-duck-bottom.xyz")
+    max_time = 360 / angular_speed_top
+    bottom = bottom[bottom[:, 2] < max_time]
+    top = top[top[:, 2] < max_time]
 
-top = PointCloud.from_file("calibration/ref-duck-top.xyz")
+    x, z = PointCloud.pol2cart(bottom[:, 0], bottom[:, 1])
+    dist = x.mean()
 
-bottom_back = PointCloud.from_file("calibration/bottom_background.xyz")
-top_back = PointCloud.from_file("calibration/top_background.xyz")
+    # angular_speed_top = estimate_angular_speed(top)
+    # angular_speed_bottom = estimate_angular_speed(bottom)
 
-lidar_bottom = Lidar('COM5', dist_lim=(20,60), angle_lim=(-15,45))
-lidar_top = Lidar('COM3', dist_lim=(20,60), angle_lim=(-45,0))
-lidar_bottom.disconnect()
-lidar_top.disconnect()
+    initial_guess = [73, 0, LIDAR_VERTICAL_SEPARATION,
+                    0, 0, 0,
+                    73, 0, 0,
+                    0, 0, 0, angular_speed_top, angular_speed_bottom]
+    optimal_params, pc_top, pc_bottom = calibrate_no_ref(top, bottom, initial_guess)
 
-lidar_bottom.curr_scan = bottom_back
-lidar_top.curr_scan = top_back
+    plot_dual_3d_clouds(pc_top, pc_bottom, "red", "blue")
 
-dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
-lidar_top.set_current_to_background(estimate_params=False)
-lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
+    # PointCloud.to_file(pc_bottom, folder='lidar-data-xyz', filename='george_bottom.xyz')
+    # PointCloud.to_file(pc_top, folder='lidar-data-xyz', filename='george_top.xyz')
 
-lidar_bottom.curr_scan = bottom
-lidar_top.curr_scan = top
+    # pc_bottom = PointCloud.from_file("lidar-data-xyz/george_bottom.xyz")
+    # pc_top = PointCloud.from_file("lidar-data-xyz/george_top.xyz")
 
-lidar_bottom.remove_background_on_current()
-lidar_top.remove_background_on_current()
+    pc_combined = np.vstack((pc_top, pc_bottom))
+    pc_combined = post_processing(pc_combined)
+    plot3d(pc_combined)
+
+    mesh = PointCloud.to_mesh(pc_combined, voxel_size=0.5)
+    PointCloud.mesh_to_stl(mesh, folder='stl', filename='george_bust_1.stl')
+    showMesh(mesh)
+
+    return pc_top, pc_bottom, pc_combined, mesh
+
+bottom = PointCloud.from_file("lidar-data-2d/scan_bottom.xyz")
+top = PointCloud.from_file("lidar-data-2d/scan_top.xyz")
+pc_top, pc_bottom, pc_combined, mesh = self_aligned_scan(top, bottom)
+
+# bottom = PointCloud.from_file("calibration/ref-duck-bottom.xyz")
+# top = PointCloud.from_file("calibration/ref-duck-top.xyz")
+
+# bottom_back = PointCloud.from_file("calibration/bottom_background.xyz")
+# top_back = PointCloud.from_file("calibration/top_background.xyz")
+
+# lidar_bottom = Lidar('COM5', dist_lim=(20,60), angle_lim=(-15,45))
+# lidar_top = Lidar('COM3', dist_lim=(20,60), angle_lim=(-45,0))
+# lidar_bottom.disconnect()
+# lidar_top.disconnect()
+
+# lidar_bottom.curr_scan = bottom_back
+# lidar_top.curr_scan = top_back
+
+# dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
+# lidar_top.set_current_to_background(estimate_params=False)
+# lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
+
+# lidar_bottom.curr_scan = bottom
+# lidar_top.curr_scan = top
+
+# lidar_bottom.remove_background_on_current()
+# lidar_top.remove_background_on_current()
 
 
 
-#  calibrate
-calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
-calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 10000) / 10
+# #  calibrate
+# calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
+# calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 10000) / 10
 
-# params_bottom = lidar_bottom.calibrate_on_current(calibration_duck, [lidar_bottom.dist_from_axis, 0, 0, 0, 0, 0])
-# params_top = lidar_top.calibrate_on_current(calibration_duck, [lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION, 0, 0, 0])
+# # params_bottom = lidar_bottom.calibrate_on_current(calibration_duck, [lidar_bottom.dist_from_axis, 0, 0, 0, 0, 0])
+# # params_top = lidar_top.calibrate_on_current(calibration_duck, [lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION, 0, 0, 0])
 
-initial_guess = [lidar_top.dist_from_axis, 0, 15.722, # lidar top pos
-                0, 0, 0,  # lidar top angle
-                lidar_bottom.dist_from_axis, 0, 0, # lidar bottom pos
-                0, 0, 0]  # lidar bottom angle
+# initial_guess = [lidar_top.dist_from_axis, 0, 15.722, # lidar top pos
+#                 0, 0, 0,  # lidar top angle
+#                 lidar_bottom.dist_from_axis, 0, 0, # lidar bottom pos
+#                 0, 0, 0]  # lidar bottom angle
 
-optimal_params, top_calibration_cloud, bottom_calibration_cloud = calibrate(lidar_top, lidar_bottom, initial_guess, calibration_duck) # make sure scans align
-print(f"Optimal Scanning Params: {optimal_params}")
-plot_dual_3d_clouds(top_calibration_cloud, bottom_calibration_cloud, 'red', 'blue')
+# optimal_params, top_calibration_cloud, bottom_calibration_cloud = calibrate(lidar_top, lidar_bottom, initial_guess, calibration_duck) # make sure scans align
+# print(f"Optimal Scanning Params: {optimal_params}")
+# plot_dual_3d_clouds(top_calibration_cloud, bottom_calibration_cloud, 'red', 'blue')
 
 
 # # calibrate

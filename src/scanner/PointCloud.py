@@ -1,11 +1,13 @@
 import numpy as np
 from datetime import datetime
-from scipy.spatial import cKDTree, KDTree
+from scipy.spatial import cKDTree
 from scipy.spatial.distance import cdist
 import scipy.signal
 import open3d as o3d
-from sklearn.linear_model import RANSACRegressor
-from sklearn.neighbors import NearestNeighbors
+from joblib import Parallel, delayed
+import matplotlib.path as mplPath
+from scipy.spatial import ConvexHull
+from sklearn.cluster import DBSCAN
 
 # converts 2d polar (in degrees) to 2d cartesian
 def pol2cart(radius, angle):
@@ -184,32 +186,6 @@ def knn_filter(cloud1, k, threshold):
     mask = distances < threshold  # Create a mask of points that are closer then the threshold
     return mask
 
-def median_filter(points, k):
-    """
-    Apply a median filter to a 3D point cloud based on k nearest neighbors.
-
-    Parameters:
-    - points: numpy array of shape (N, 3) representing N 3D points
-    - k: number of nearest neighbors to consider
-
-    Returns:
-    - filtered_points: numpy array of shape (N, 3) containing the filtered point cloud
-    """
-
-    tree = cKDTree(points)
-    filtered_points = np.empty_like(points)
-
-    for i, point in enumerate(points):
-        # Query k nearest neighbors
-        distances, indices = tree.query(point, k=k)
-        neighbors = points[indices]
-
-        # Compute median of neighbors for each dimension
-        median = np.median(neighbors, axis=0)
-        filtered_points[i] = median
-
-    return filtered_points
-
 def gaussian_filter_knn(points, k, sigma):
     """
     Apply a Gaussian filter to a 3D point cloud based on k nearest neighbors.
@@ -271,45 +247,27 @@ def estimate_normals(points, radius):
     return normals
 
 def bilateral_filter_point_cloud(points, normals, radius, sigma_s, sigma_n):
-    """
-    Apply a bilateral filter to a point cloud using a k-d tree for spatial searching.
-    Only points within a specified radius are considered for computing the filter response.
-    
-    points: A numpy array of shape (N, 3) representing the point cloud.
-    normals: A numpy array of shape (N, 3) representing the estimated normals for the point cloud.
-    sigma_s: The spatial standard deviation of the Gaussian.
-    sigma_n: The standard deviation for the normals in the Gaussian range component.
-    radius: The radius within which to evaluate nearest neighbors for filtering.
-    
-    Returns a filtered point cloud of the same shape as points.
-    """
     tree = cKDTree(points)
-    filtered_points = np.zeros_like(points)
+    n_points = len(points)
 
-    for i, point in enumerate(points):
-        # Find points within the specified radius for spatial component
+    def process_point(i):
+        point = points[i]
         idx = tree.query_ball_point(point, radius)
         neighbors = points[idx]
         neighbor_normals = normals[idx]
-        
-        # Compute spatial weights
+
         spatial_weights = np.exp(-cdist([point], neighbors, 'sqeuclidean')[0] / (2 * sigma_s**2))
         
-        # Compute normal weights
         normal_differences = 1 - np.abs(np.einsum('ij,j->i', neighbor_normals, normals[i]))
-        # normal_differences = -(np.log(1-normal_differences))
         normal_weights = np.exp(-(normal_differences**2) / (2 * sigma_n**2))
         
-        # Combine weights
         weights = spatial_weights * normal_weights
-        
-        # Normalize weights
         weights /= weights.sum()
-        
-        # Calculate the filtered point
-        filtered_points[i] = np.dot(weights, neighbors)
-    
-    return filtered_points
+
+        return np.dot(weights, neighbors)
+
+    filtered_points = Parallel(n_jobs=-1)(delayed(process_point)(i) for i in range(n_points))
+    return np.array(filtered_points)
 
 def gaussian_filter_radius(points, radius, sigma):
     """
@@ -342,75 +300,81 @@ def gaussian_filter_radius(points, radius, sigma):
 
     return filtered_points
 
-# adds points to make the bottom/top of the point cloud flat
-def fillFace(pc, density=10, num_points_from_edge=10, dist_from_edge=0.4, bottom=False, top=False):
+def add_bottom_surface(pc, z_percentile=1, percent_height=1, grid_spacing=0.1, eps=100, min_samples=10, crop=False):
+    """
+    Add points to a point cloud to create a flat bottom surface at a specified z_value
+    for multiple, non-intersecting polygons, including points within a certain distance above it.
 
-    # get cylindrical coordinates
-    x = pc[:,0]
-    y = pc[:,1]
-    z = pc[:,2]
+    Parameters:
+    pc (np.ndarray): A NumPy array of shape (N, 3) representing the point cloud.
+    z_value (float): The Z percentile at which to add the flat bottom.
+    percent_height (float): The percent of total height above z_value to include points in the boundary calulcations.
+    grid_spacing (float): Spacing between grid points in the flat bottom.
+    eps (float): The maximum distance between two samples for them to be considered as in the same neighborhood (DBSCAN parameter).
+    min_samples (int): The number of samples in a neighborhood for a point to be considered as a core point (DBSCAN parameter).
+    crop (bool) : whether to remove all points below the z_percentile
 
-    r, theta = cart2pol(x, y)
-    unique_theta = np.unique(theta)
+    Returns:
+    np.ndarray: The modified point cloud with a flat bottom added.
+    """
 
-    # get min z 
-    min_idx = np.argpartition(z, num_points_from_edge)
-    min_z = np.median(z[min_idx[:num_points_from_edge]])
-    pc = pc[pc[:, 2] > min_z]
+    z_value = np.percentile(pc[:, 2], z_percentile)
+    dist = (pc[:, 2].max() - pc[:, 2].min()) * percent_height/100
+    # Filter points that are within dist above the z_value
+    bottom_points = pc[(pc[:, 2] >= z_value) & (pc[:, 2] <= z_value + dist)]
 
-    # get max z
-    max_idx = np.argpartition(z, -num_points_from_edge)
-    max_z = np.median(z[max_idx[-num_points_from_edge]])
-    pc = pc[pc[:, 2] < max_z]
+    if len(bottom_points) == 0:
+        return pc  # No points to form a bottom surface
 
-    # fill in points on plane of min_z
-    all_new_r = np.empty(0)
-    all_new_theta = np.empty(0)
-    all_new_z = np.empty(0)
-   
-    if bottom:
-        # bottom face
-        for t in unique_theta:
-            indices = np.where(theta == t)
-            curr_min_z = np.max(z[indices])
-            if np.abs(curr_min_z - min_z) > dist_from_edge:
-                continue
-            min_idx = np.argmin(z[indices])
-            target_r = r[indices][min_idx]
+    # Cluster the bottom points into separate polygons
+    clustering = DBSCAN(eps=eps, min_samples=min_samples).fit(bottom_points[:, :2])
+    labels = clustering.labels_
 
-            new_r = np.random.ranf((density)) * target_r
-            new_z = np.full(new_r.shape, min_z)
-            new_theta = np.full(new_r.shape, t)
+    # Create a grid of points at the z_value level
+    x_min, x_max = np.min(pc[:, 0]), np.max(pc[:, 0])
+    y_min, y_max = np.min(pc[:, 1]), np.max(pc[:, 1])
+    x_grid, y_grid = np.meshgrid(np.arange(x_min, x_max, grid_spacing), np.arange(y_min, y_max, grid_spacing))
+    grid_points = np.column_stack([x_grid.ravel(), y_grid.ravel()])
 
-            all_new_r = np.concatenate((all_new_r, new_r))
-            all_new_z = np.concatenate((all_new_z, new_z))
-            all_new_theta = np.concatenate((all_new_theta, new_theta))
-    if top:
-        # top face
-        max_z = max_z
-        for t in unique_theta:
+    # Initialize an array to hold all new bottom surface points
+    all_bottom_surface_points = np.empty((0, 3))
 
-            indices = np.where(theta == t)
-            curr_max_z = np.max(z[indices])
-            if np.abs(curr_max_z - max_z) > dist_from_edge:
-                continue
+    # Process each polygon separately
+    for label in set(labels):
+        if label == -1:  # Skip noise points
+            continue
 
-            max_idx = np.argmax(z[indices])
-            target_r = r[indices][max_idx]
+        # Points in the current polygon
+        polygon_points = bottom_points[labels == label]
 
-            new_r = (np.random.ranf(density)) * target_r
-            new_z = np.full(new_r.shape, max_z)
-            new_theta = np.full(new_r.shape, t)
+        # Create a polygon path
+        if len(polygon_points) < 3:  # Not enough points to form a polygon
+            continue
 
-            all_new_r = np.concatenate((all_new_r, new_r))
-            all_new_z = np.concatenate((all_new_z, new_z))
-            all_new_theta = np.concatenate((all_new_theta, new_theta))
+        try:
+            hull = ConvexHull(polygon_points[:, :2])
+            polygon_path = mplPath.Path(polygon_points[hull.vertices, :2])
 
-    # convert new points back to cartesian
-    x, y = pol2cart(all_new_r, all_new_theta)
-    new_points = np.column_stack((x, y, all_new_z))
-    pc = np.vstack((pc, new_points))
-    return pc
+            # Filter grid points that fall inside the polygon
+            inside = polygon_path.contains_points(grid_points)
+            bottom_surface_points = grid_points[inside]
+            bottom_surface_points = np.hstack([bottom_surface_points, np.full((len(bottom_surface_points), 1), z_value)])
+
+            # Add these points to the all_bottom_surface_points array
+            all_bottom_surface_points = np.vstack((all_bottom_surface_points, bottom_surface_points))
+        except scipy.spatial.qhull.QhullError:
+            # Handle error if ConvexHull cannot be formed
+            continue
+
+    # Add the new bottom points to the original point cloud
+
+    if crop:
+        pc = pc[pc[:, 2] >= z_value + grid_spacing]
+
+    new_pc = np.vstack((pc, all_bottom_surface_points))
+
+    return new_pc
+
 
 def icp(source, target):
     source_pcd = o3d.geometry.PointCloud()
@@ -607,8 +571,31 @@ def chamfer_distance(point_cloud_a, point_cloud_b, only_a_to_b=False):
     else:
         return chamfer_a_to_b + chamfer_b_to_a
 
+def get_surface_points(input_cloud, voxel_size=0.1):
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(input_cloud)
 
-def to_mesh(points_3d):
+    # Estimate normals
+    pcd.estimate_normals()
+
+    # Optionally, you might want to orient the normals (if necessary)
+    pcd.orient_normals_consistent_tangent_plane(k=100)
+
+    # Downsample the point cloud
+    downpcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+
+    # Surface reconstruction using Poisson reconstruction
+    mesh, _ = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(downpcd, depth=9)
+
+    # Extract surface points from mesh
+    surface_points = o3d.geometry.PointCloud()
+    surface_points.points = mesh.vertices
+
+    # Convert the processed point cloud back to a NumPy array
+    return np.asarray(surface_points.points)
+
+
+def to_mesh(points_3d, voxel_size=0.1):
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points_3d)    
 
@@ -618,11 +605,13 @@ def to_mesh(points_3d):
     pcd.estimate_normals()
     pcd.orient_normals_consistent_tangent_plane(100)
 
+    # Downsample the point cloud
+    downpcd = pcd.voxel_down_sample(voxel_size=voxel_size)
 
     with o3d.utility.VerbosityContextManager(
         o3d.utility.VerbosityLevel.Debug) as cm:
         mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-            pcd, depth=9)
+            downpcd, depth=9)
     
     mesh.compute_vertex_normals()
     mesh.paint_uniform_color([1, 0.706, 0])

@@ -118,31 +118,6 @@ def lidar2d_to_3d(scan, angular_speed=30, pos=(0,0,0), angular_pos=(0,0,0)):
     points = np.reshape(points, scan.shape)
     return points
 
-
-def interpolate_2d_curve(points, num_points):
-    """
-    Interpolate a set of 2D points to form a 1D curve.
-
-    :param points: A 2D numpy array of points (shape: [n_points, 2]).
-    :param num_points: The number of points in the interpolated curve.
-    :return: A 2D numpy array representing the interpolated 1D curve.
-    """
-    # Calculate the cumulative distance for each point
-    distances = np.cumsum(np.sqrt(np.sum(np.diff(points, axis=0)**2, axis=1)))
-    distances = np.insert(distances, 0, 0)
-
-    # Create the parameter for interpolation
-    parameter = np.linspace(0, distances[-1], num_points)
-
-    # Interpolate x and y separately
-    x_interpolated = interp1d(distances, points[:, 0], kind='linear', bounds_error=False, fill_value="extrapolate")(parameter)
-    y_interpolated = interp1d(distances, points[:, 1], kind='linear', bounds_error=False, fill_value="extrapolate")(parameter)
-
-    # Combine x and y into a single array
-    interpolated_curve = np.vstack((x_interpolated, y_interpolated)).T
-
-    return interpolated_curve
-
 # perform dft to estimate angular speed of turntable
 def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
     dist = scan[:, 0]
@@ -236,21 +211,20 @@ def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
 
         for freq, multiples in freq_multiples.items():
             indices = np.nonzero(np.isin(freqs, multiples))[0]
-            combined_weight = np.sum(dft[indices]**2)
+            combined_weight = np.sum(dft[indices][0])
 
             if combined_weight > max_combined_weight:
                 max_combined_weight = combined_weight
                 dominant_freq = freq
 
         return dominant_freq
-    domanant_freq = find_dominant_frequency(dft_result, freqs, 25, 45)
+    domanant_freq = find_dominant_frequency(dft_result, freqs, 10, 20)
     print(f"Estimated angular speed: {domanant_freq} deg/sec")
     return domanant_freq
 
 pc_combined = None
 pc_top = None
 pc_bottom = None
-t_guess = np.zeros(6)
 def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
     angular_speed_top = estimate_angular_speed(top_scan)
     angular_speed_bottom = estimate_angular_speed(bottom_scan)
@@ -269,7 +243,6 @@ def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
 
         # current scan estimate
         pc_top = lidar2d_to_3d(top_scan, angular_speed_top, pos=pos_top, angular_pos=angle_top)
-
         pc_bottom = lidar2d_to_3d(bottom_scan, angular_speed_bottom, pos=pos_bottom, angular_pos=angle_bottom)
 
         # make sure point clouds are aligned    
@@ -278,11 +251,9 @@ def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
         # find error due to difference between reference scans and reference object 
         pc_ref = PointCloud.apply_transformation(transformation, pc_combined)
         reconstrction_loss = PointCloud.chamfer_distance(pc_ref, ref)
-        # reconstrction_loss = 0
         
         # find error due to disalignment between the two current top and bottom scans
         disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
-        # disalignment_loss = 0
 
         regularization = np.sum((np.subtract(params[0:12], initial_guess[0:12]))**2)
         loss = reconstrction_loss + disalignment_loss + regularization / 8
@@ -294,8 +265,37 @@ def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
 
     optimized_params = minimize(loss_function, initial_guess, method='SLSQP').x
     print("Calibration parameters:", optimized_params)
+    return optimized_params, pc_top, pc_bottom
 
+# calibrate without reference, returns scanning parameters that result in point clouds that are aligned
+def calibrate_no_ref(top_scan, bottom_scan, initial_guess):
+    initial_guess = np.array(initial_guess)
 
+    def loss_function(params):
+        global pc_bottom
+        global pc_top
+        pos_top = params[0:3]
+        angle_top = params[3:6]
+        pos_bottom = params[6:9]
+        angle_bottom = params[9:12]
+
+        # current scan estimate
+        pc_top = lidar2d_to_3d(top_scan, params[12], pos=pos_top, angular_pos=angle_top)
+        pc_bottom = lidar2d_to_3d(bottom_scan, params[13], pos=pos_bottom, angular_pos=angle_bottom)
+
+        # find error due to disalignment between the two current top and bottom scans
+        disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
+
+        mask = np.ones(params.size, dtype=bool)
+        regularization = np.sum((np.subtract(params[mask], initial_guess[mask]))**2)
+        loss = disalignment_loss + regularization / 4
+
+        print(f"reg loss: {regularization}, d loss: {disalignment_loss}")
+        print(loss)
+        return loss
+    
+    optimized_params = minimize(loss_function, initial_guess, method='SLSQP').x
+    print("Calibration parameters:", optimized_params)
     return optimized_params, pc_top, pc_bottom
 
 class Lidar():
