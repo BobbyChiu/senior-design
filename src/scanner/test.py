@@ -69,9 +69,11 @@ def self_aligned_scan(top, bottom):
     angular_speed_top = estimate_angular_speed(top)
     angular_speed_bottom = estimate_angular_speed(bottom)
 
-    max_time = 360 / angular_speed_top
-    bottom = bottom[bottom[:, 2] < max_time]
-    top = top[top[:, 2] < max_time]
+    max_time_bot = 360 / angular_speed_bottom
+    max_time_top = 360 / angular_speed_top
+    scan_num = 1
+    bottom = bottom[(bottom[:, 2] < max_time_bot * (scan_num)) & (bottom[:, 2] > max_time_bot * (scan_num - 1))]
+    top = top[(top[:, 2] < max_time_top * (scan_num)) & (top[:, 2] > max_time_top * (scan_num - 1))]
 
     x, z = PointCloud.pol2cart(bottom[:, 0], bottom[:, 1])
     dist = x.mean()
@@ -79,9 +81,9 @@ def self_aligned_scan(top, bottom):
     # angular_speed_top = estimate_angular_speed(top)
     # angular_speed_bottom = estimate_angular_speed(bottom)
 
-    initial_guess = [73, 0, LIDAR_VERTICAL_SEPARATION,
+    initial_guess = [80, 0, LIDAR_VERTICAL_SEPARATION,
                     0, 0, 0,
-                    73, 0, 0,
+                    80, 0, 0,
                     0, 0, 0, angular_speed_top, angular_speed_bottom]
     optimal_params, pc_top, pc_bottom = calibrate_no_ref(top, bottom, initial_guess)
 
@@ -98,7 +100,7 @@ def self_aligned_scan(top, bottom):
     plot3d(pc_combined)
 
     mesh = PointCloud.to_mesh(pc_combined, voxel_size=0.5)
-    PointCloud.mesh_to_stl(mesh, folder='stl', filename='george_bust_1.stl')
+    PointCloud.mesh_to_stl(mesh, folder='stl', filename='george_bust_3.stl')
     showMesh(mesh)
 
     return pc_top, pc_bottom, pc_combined, mesh

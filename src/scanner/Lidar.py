@@ -218,7 +218,7 @@ def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
                 dominant_freq = freq
 
         return dominant_freq
-    domanant_freq = find_dominant_frequency(dft_result, freqs, 10, 20)
+    domanant_freq = find_dominant_frequency(dft_result, freqs, 10, 40)
     print(f"Estimated angular speed: {domanant_freq} deg/sec")
     return domanant_freq
 

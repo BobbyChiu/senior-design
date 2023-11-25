@@ -313,8 +313,8 @@ if __name__ == '__main__':
         )
 
     
-    lidar_top, lidar_bottom = auto_get_lidars((30, 100), (-20, 45),
-                                              (30, 100), (-45, 45))
+    lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-45, 0),
+                                              (10, 50), (-15, 45))
     try:
         with argsource:
             def process_commands():
@@ -374,7 +374,7 @@ if __name__ == '__main__':
             t = threading.Thread(target=process_commands, daemon=True)
             t.start()
 
-            plot2d_realtime([top_buffer, bottom_buffer], ['red', 'blue'], interval=10, xlim=(30, 100), ylim=(-20, 45))
+            plot2d_realtime([top_buffer, bottom_buffer], ['red', 'blue'], interval=10, xlim=(0, 50), ylim=(-25, 25))
     finally:
         lidar_top.disconnect()
         lidar_bottom.disconnect()
