@@ -211,14 +211,14 @@ def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
 
         for freq, multiples in freq_multiples.items():
             indices = np.nonzero(np.isin(freqs, multiples))[0]
-            combined_weight = np.sum(dft[indices][0])
+            combined_weight = np.sum(dft[indices]**2)
 
             if combined_weight > max_combined_weight:
                 max_combined_weight = combined_weight
                 dominant_freq = freq
 
         return dominant_freq
-    domanant_freq = find_dominant_frequency(dft_result, freqs, 10, 40)
+    domanant_freq = find_dominant_frequency(dft_result, freqs, 25, 40)
     print(f"Estimated angular speed: {domanant_freq} deg/sec")
     return domanant_freq
 
@@ -234,7 +234,6 @@ def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
         global pc_combined
         global pc_bottom
         global pc_top
-        global t_guess
         pos_top = params[0:3]
         angle_top = params[3:6]
         pos_bottom = params[6:9]

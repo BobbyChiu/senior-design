@@ -52,6 +52,9 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     print(f"Optimal Scanning Params: {optimal_params}")
     plot_dual_3d_clouds(top_calibration_cloud, bottom_calibration_cloud, 'red', 'blue')
 
+    PointCloud.to_file(top_calibration_cloud, folder="calibration", filename="top_cal.xyz")
+    PointCloud.to_file(bottom_calibration_cloud, folder="calibration", filename="bottom_cal.xyz")
+
     # save calibration data
     PointCloud.to_file(optimal_params, folder="calibration", filename="calibration.data")
 
@@ -107,7 +110,7 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
     pc_final = np.vstack((pc_bottom, pc_top))
     
     # save pc_final before processing
-    # PointCloud.to_file(pc_final, folder="lidar-data-xyz")
+    PointCloud.to_file(pc_final, folder="lidar-data-xyz")
 
     plot3d(pc_final) # show point cloud
     return pc_final

@@ -50,8 +50,8 @@ def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params
     # add flat bottom surface
     pc = PointCloud.add_bottom_surface(pc, 
                                        z_percentile=1, 
-                                       percent_height=10, 
-                                       grid_spacing=0.5, 
+                                       percent_height=1, 
+                                       grid_spacing=0.1, 
                                        crop=True)
     
     # optional: add flat top surface
@@ -59,7 +59,7 @@ def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params
     pc = PointCloud.add_bottom_surface(pc, 
                                        z_percentile=1,
                                        percent_height=1,
-                                       grid_spacing=0.5,
+                                       grid_spacing=0.1,
                                        crop=True)
     
     pc[:, 2] = - pc[:, 2]
@@ -105,9 +105,35 @@ def self_aligned_scan(top, bottom):
 
     return pc_top, pc_bottom, pc_combined, mesh
 
-bottom = PointCloud.from_file("lidar-data-2d/scan_bottom.xyz")
-top = PointCloud.from_file("lidar-data-2d/scan_top.xyz")
-pc_top, pc_bottom, pc_combined, mesh = self_aligned_scan(top, bottom)
+# bottom = PointCloud.from_file("lidar-data-2d/scan_bottom.xyz")
+# top = PointCloud.from_file("lidar-data-2d/scan_top.xyz")
+# pc_top, pc_bottom, pc_combined, mesh = self_aligned_scan(top, bottom)
+
+
+############### viz
+
+top_cal = PointCloud.from_file("calibration/top_cal.xyz")
+bot_cal = PointCloud.from_file("calibration/bottom_cal.xyz")
+plot_dual_3d_clouds(top_cal, bot_cal, 'red', 'blue')
+
+sandia_pre = PointCloud.from_file("lidar-data-xyz/sandia_voxel_pre.xyz")
+plot3d(sandia_pre)
+
+sandia_post = PointCloud.from_file("lidar-data-xyz/sandia_voxel.xyz")
+plot3d(sandia_post)
+
+mesh = PointCloud.to_mesh(sandia_post)
+showMesh(mesh)
+
+cube_pre = PointCloud.from_file("lidar-data-xyz/cube_voxel_pre.xyz")
+plot3d(cube_pre)
+
+cube_post = PointCloud.from_file("lidar-data-xyz/cube_voxel.xyz")
+plot3d(cube_post)
+
+mesh = PointCloud.to_mesh(cube_post)
+showMesh(mesh)
+
 
 # bottom = PointCloud.from_file("calibration/ref-duck-bottom.xyz")
 # top = PointCloud.from_file("calibration/ref-duck-top.xyz")
