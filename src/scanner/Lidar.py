@@ -100,12 +100,7 @@ def auto_get_lidars(top_dist_lim, top_ang_lim, bot_dist_lim, bot_ang_lim):
     lidar1 = Lidar(lidar_ports[0], dist_lim=(0, 50), angle_lim=(-90, -60))
     lidar2 = Lidar(lidar_ports[1], dist_lim=(0, 50), angle_lim=(-90, -60))
 
-    # Assuming Lidar.startScan(), Lidar.stopScan(), Lidar.get3DPointCloud(), and Lidar.disconnect() are defined elsewhere
-    lidar1.startScan()
-    lidar2.startScan()
-    time.sleep(2)
-    lidar1.stopScan()
-    lidar2.stopScan()
+    start_stop_scan([lidar1, lidar2], 2)
 
     pc1 = lidar1.get3DPointCloud(angular_speed=0)
     pc2 = lidar2.get3DPointCloud(angular_speed=0)
@@ -307,7 +302,7 @@ def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
         disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
 
         regularization = np.sum((np.subtract(params[0:12], initial_guess[0:12]))**2)
-        loss = reconstrction_loss + disalignment_loss + regularization / 128
+        loss = reconstrction_loss + disalignment_loss + regularization / 2
 
         print(f"reg loss: {reconstrction_loss}, d loss: {disalignment_loss}")
         print(loss)
@@ -386,26 +381,24 @@ class Lidar():
         self.background_data = np.array([])
         self.pos = pos
         self.angular_pos = angular_pos
-
-        # init lidar
         self.lidar = RPLidar(port)
-        self.lidar.motor_speed= MAX_MOTOR_PWM
+
+        # connect to lidar
         info = self.lidar.get_info()
         print(info)
         health = self.lidar.get_health()
         print(health)
-        self.scan_generator = self.lidar.iter_scans( max_buf_meas=10000)
-
-        # start lidar scanning thread
+        
         self.kill_thread = False
-        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
-        self.scan_thread.start()
 
     def _scan_thread(self):
         """Background thread that samples from the lidar.
         If self.scanning is true, then self.curr_scan contains raw lidar data.
         This thread can be killed by setting self.kill_thread to true.
         """
+        # start scan
+        self.scan_generator = self.lidar.iter_scans(scan_type='express', max_buf_meas=3000)
+
         for scan in self.scan_generator:
             # add data to plotting queue
             scan_time = time.time()
@@ -414,7 +407,6 @@ class Lidar():
             if len(scan.shape) > 2:
                 scan = np.reshape(scan, (scan.shape[0] * scan.shape[1], scan.shape[2]))
 
-            scan = scan[(scan[:, 0] == 15)]  # remove noisy points
             scan = scan[:, [2, 1]] # get data as [dist, angle]
             scan[:, 0] = scan[:, 0]/10 # convert from mm to cm
 
@@ -436,6 +428,7 @@ class Lidar():
                 self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
 
             if self.kill_thread:
+                self.lidar.stop()
                 return
 
     def startScan(self, start_time=None):
@@ -448,12 +441,18 @@ class Lidar():
         else:
             self.start_scan_time = start_time
 
+        self.kill_thread = False
         self.curr_scan = np.empty((0, 3))
         self.scanning = True
+        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
+        self.scan_thread.start()
+        
 
     def stopScan(self):
         """Stop the scan.
         """
+        self.kill_thread = True
+        self.scan_thread.join()
         self.scanning = False
 
     # estimates and sets the angular bias assuming the current scan is a vertical line
@@ -619,29 +618,3 @@ class Lidar():
                                         angular_pos=self.angular_pos)
 
         return result
-
-    def disconnect(self):
-        """Stop and disconnect the lidar.
-        """
-        self.kill_thread = True
-        self.scan_thread.join()
-        self.lidar.stop()
-        self.lidar.stop_motor()
-        self.lidar.disconnect()
-
-    def __enter__(self):
-        """Start background thread to stream data from lidar.
-        """
-
-        self.kill_thread = False
-        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
-        self.scan_thread.start()
-        return self
-
-    # def __exit__(self, exc_type, exc_value, traceback):
-        """Attempt to kill the background thread. Also try to disconnect the lidar.
-        """
-
-        self.kill_thread = True
-        self.scan_thread.join()
-        self.disconnect()

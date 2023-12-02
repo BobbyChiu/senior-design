@@ -1,3 +1,7 @@
+import pyqtgraph as pg
+from PyQt5.QtWidgets import QApplication
+from PyQt5.QtCore import QTimer
+import sys
 import plotly
 import plotly.graph_objs as go
 from matplotlib import pyplot as plt
@@ -55,44 +59,30 @@ def plot3d(points_3d):
     # Render the plot
     plotly.offline.iplot(plot_figure)
 
-def plot2d_realtime(buffers, colors, interval=50, xlim=(0, 50), ylim=(-25,25)): 
-    # plot
-    fig, ax = plt.subplots()
-    sc = ax.scatter([], [])
+def plot2d_realtime(buffers, colors, interval=25, xlim=(0, 80), ylim=(-40, 40)):
+    app = QApplication([])
+    win = pg.GraphicsLayoutWidget(show=True)
+    plot = win.addPlot()
+    plot.setXRange(*xlim)
+    plot.setYRange(*ylim)
 
-    ax.set_xlim(xlim)
-    ax.set_ylim(ylim)
+    scatter_plots = [pg.ScatterPlotItem(pen=pg.mkPen(None), brush=pg.mkBrush(color)) for color in colors]
 
-    last_buffer_data = np.full(len(buffers), None)
-    def consumerThread(frame):
-        # update buffer data
-        for i, (buffer, color) in enumerate(zip(buffers, colors)):
-            try:
-                new_data = buffer.get_nowait()
-                last_buffer_data[i] = (new_data[:,0], 
-                                       new_data[:,1], 
-                                       np.full(new_data.shape[0], color))
-            except Exception as e:
-                pass
-        # concatenate data from all buffers
-        x, y, c = ([], [], [])
-        for buffer_data in last_buffer_data:
-            if buffer_data is None:
-                continue
-            x = np.append(x, buffer_data[0])
-            y = np.append(y, buffer_data[1])
-            c = np.append(c, buffer_data[2])
-        # update plot
-        try:
-            sc.set_offsets(list(zip(x, y)))
-            sc.set_color(c)
-        finally:
-            return sc
-    
-    ani = FuncAnimation(fig, 
-                        consumerThread,
-                        interval=interval)
-    plt.show() # loops until q is pressed
+    for scatter_plot in scatter_plots:
+        plot.addItem(scatter_plot)
+
+    def update():
+        for scatter_plot, buffer in zip(scatter_plots, buffers):
+            if not buffer.empty():
+                data = buffer.get()
+                scatter_plot.setData(data[:, 0], data[:, 1])
+
+    timer = QTimer()
+    timer.timeout.connect(update)
+    timer.start(interval)
+
+    if (sys.flags.interactive != 1) or not hasattr(pg.QtCore, 'PYQT_VERSION'):
+        QApplication.instance().exec_()
     
 def showMesh(mesh):
     o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True, mesh_show_back_face=True)

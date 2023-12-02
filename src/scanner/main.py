@@ -319,68 +319,60 @@ if __name__ == '__main__':
     
     lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-50, 0),
                                               (10, 50), (-15, 45))
-    try:
-        with argsource:
-            def process_commands():
-                # Keep state
-                pc_raw = None
-                pc_processed = None
-                mesh = None
+    with argsource:
+        def process_commands():
+            # Keep state
+            pc_raw = None
+            pc_processed = None
+            mesh = None
 
-                for arguments in argsource.command_generator():
-                    output_string = ''
-                    try:
-                        # Receive input
-                        arg_dict = parse_arguments(arguments)
+            for arguments in argsource.command_generator():
+                output_string = ''
+                try:
+                    # Receive input
+                    arg_dict = parse_arguments(arguments)
 
-                        # Do action
-                        if arg_dict['do'] == '!help':
-                            output_string = parser.format_help()
-                        elif arg_dict['do'] == 'calibrate':
-                            do_calibration(lidar_bottom, lidar_top, **arg_dict)
-                            output_string = 'Calibrate finished.'
-                        elif arg_dict['do'] == 'scan':
-                            pc_raw = do_scan(lidar_bottom, lidar_top, **arg_dict)
-                            output_string = 'Scan finished.'
-                        elif arg_dict['do'] == 'open':
-                            pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
-                            output_string = 'Open finished.'
-                        elif arg_dict['do'] == 'process':
-                            pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
-                            output_string = 'Process finished.'
-                        elif arg_dict['do'] == 'generate':
-                            mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
-                            do_generate_files(pc=pc_processed, 
-                                            lidar_bottom=lidar_bottom, 
-                                            lidar_top=lidar_top,
-                                            mesh=mesh,
-                                            **arg_dict)
-                            output_string = 'Generate finished.'
-                        elif arg_dict['do'] == '!quit':
-                            # Exit condition
-                            output_string = '!quit'
-                            break
-                        else:
-                            raise ValueError(f'unknown ACTION: {arg_dict["do"]}')
-                    except Exception as e:
-                        print_exc()
-                        output_string = f'{str(e)}\nType "!help" for actions and arguments.\n'
-                    finally:
-                        argsource.output_string(output_string)
+                    # Do action
+                    if arg_dict['do'] == '!help':
+                        output_string = parser.format_help()
+                    elif arg_dict['do'] == 'calibrate':
+                        do_calibration(lidar_bottom, lidar_top, **arg_dict)
+                        output_string = 'Calibrate finished.'
+                    elif arg_dict['do'] == 'scan':
+                        pc_raw = do_scan(lidar_bottom, lidar_top, **arg_dict)
+                        output_string = 'Scan finished.'
+                    elif arg_dict['do'] == 'open':
+                        pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
+                        output_string = 'Open finished.'
+                    elif arg_dict['do'] == 'process':
+                        pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
+                        output_string = 'Process finished.'
+                    elif arg_dict['do'] == 'generate':
+                        mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
+                        do_generate_files(pc=pc_processed, 
+                                        lidar_bottom=lidar_bottom, 
+                                        lidar_top=lidar_top,
+                                        mesh=mesh,
+                                        **arg_dict)
+                        output_string = 'Generate finished.'
+                    elif arg_dict['do'] == '!quit':
+                        # Exit condition
+                        output_string = '!quit'
+                        break
+                    else:
+                        raise ValueError(f'unknown ACTION: {arg_dict["do"]}')
+                except Exception as e:
+                    print_exc()
+                    output_string = f'{str(e)}\nType "!help" for actions and arguments.\n'
+                finally:
+                    argsource.output_string(output_string)
 
-            top_buffer = lidar_top.get_buffer()
-            bottom_buffer = lidar_bottom.get_buffer()
+        top_buffer = lidar_top.get_buffer()
+        bottom_buffer = lidar_bottom.get_buffer()
 
-            while top_buffer.empty() or bottom_buffer.empty():
-                time.sleep(0.001)
-
-            # run in separate thread since Matplotlib requires the main thread
-            t = threading.Thread(target=process_commands, daemon=True)
-            t.start()
-
-            plot2d_realtime([top_buffer, bottom_buffer], ['red', 'blue'], interval=10, xlim=(0, 80), ylim=(-40, 40))
-    finally:
-        lidar_top.disconnect()
-        lidar_bottom.disconnect()
+        # run in separate thread since Matplotlib requires the main thread
+        t = threading.Thread(target=process_commands, daemon=True)
+        t.start()
+        plot2d_realtime([top_buffer, bottom_buffer], ['red', 'blue'], interval=50, xlim=(0, 80), ylim=(-40, 40))
 
 
