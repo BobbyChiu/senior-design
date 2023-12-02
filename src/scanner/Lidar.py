@@ -13,6 +13,57 @@ from sklearn.decomposition import PCA
 import open3d as o3d
 import serial.tools.list_ports
 
+def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params=(20, 2)):
+
+    # filtering to remove outliers
+    if knn:
+        for k, threshold in knn.items():
+            mask = PointCloud.knn_filter(pc, k, threshold)
+            pc = pc[mask[:, 0]]
+
+    # smoothening
+    # pc = PointCloud.gaussian_filter_radius(pc, 1, 1)
+    # estimated_normals = PointCloud.estimate_normals(pc, radius=10)
+    # pc = PointCloud.bilateral_filter_point_cloud(pc, 
+    #                                             estimated_normals, 
+    #                                             radius=10, 
+    #                                             sigma_s=1, 
+    #                                             sigma_n=0.1) 
+
+
+    pc = PointCloud.get_surface_points(pc, voxel_size=0.05)
+                                                
+    # open3d outlier remover
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(pc)
+    # statistical outlier removal
+    cl, ind = pcd.remove_statistical_outlier(nb_neighbors=stat_out_rem_params[0], 
+                                             std_ratio=stat_out_rem_params[1])
+    pcd = pcd.select_by_index(ind)
+    # # radius outlier removal
+    # cl, ind = pcd.remove_radius_outlier(nb_points=rad_out_rem_params[0],
+    #                                     radius=rad_out_rem_params[1])
+    # pcd = pcd.select_by_index(ind)
+    pc = np.asarray(pcd.points)
+
+    # add flat bottom surface
+    pc = PointCloud.add_bottom_surface(pc, 
+                                       z_percentile=1, 
+                                       percent_height=1, 
+                                       grid_spacing=0.1, 
+                                       crop=True)
+    
+    # # optional: add flat top surface
+    # pc[:, 2] = - pc[:, 2]
+    # pc = PointCloud.add_bottom_surface(pc, 
+    #                                    z_percentile=1,
+    #                                    percent_height=1,
+    #                                    grid_spacing=0.1,
+    #                                    crop=True)
+    
+    # pc[:, 2] = - pc[:, 2]
+    return pc
+
 def start_stop_scan(lidars, scan_time):
     start_time = time.time()
     for l in lidars:
@@ -113,7 +164,7 @@ def lidar2d_to_3d(scan, angular_speed=30, pos=(0,0,0), angular_pos=(0,0,0)):
 
     # points in frame of reference of axis of rotation    
     points_unrotated = pos + lidar_points # assume lidar is facing (0,0,0) so subtract instead of add
-    yaw = -angular_speed * t  # yaw
+    yaw = angular_speed * t  # yaw
     points = apply_yaw_to_points(yaws=yaw, points=points_unrotated)
     points = np.reshape(points, scan.shape)
     return points
@@ -246,6 +297,7 @@ def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
 
         # make sure point clouds are aligned    
         pc_combined = np.vstack((pc_top, pc_bottom))
+        # pc_combined = post_processing(pc_combined)
 
         # find error due to difference between reference scans and reference object 
         pc_ref = PointCloud.apply_transformation(transformation, pc_combined)
@@ -255,7 +307,7 @@ def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
         disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
 
         regularization = np.sum((np.subtract(params[0:12], initial_guess[0:12]))**2)
-        loss = reconstrction_loss + disalignment_loss + regularization / 8
+        loss = reconstrction_loss + disalignment_loss + regularization / 128
 
         print(f"reg loss: {reconstrction_loss}, d loss: {disalignment_loss}")
         print(loss)
@@ -342,7 +394,7 @@ class Lidar():
         print(info)
         health = self.lidar.get_health()
         print(health)
-        self.scan_generator = self.lidar.iter_scans('express')
+        self.scan_generator = self.lidar.iter_scans( max_buf_meas=10000)
 
         # start lidar scanning thread
         self.kill_thread = False
@@ -362,11 +414,10 @@ class Lidar():
             if len(scan.shape) > 2:
                 scan = np.reshape(scan, (scan.shape[0] * scan.shape[1], scan.shape[2]))
 
-            # scan = scan[(scan[:, 0] == 15)]  # remove noisy points
+            scan = scan[(scan[:, 0] == 15)]  # remove noisy points
             scan = scan[:, [2, 1]] # get data as [dist, angle]
             scan[:, 0] = scan[:, 0]/10 # convert from mm to cm
 
-            # apply angular bias
             scan[:, 1] = scan[:, 1] + 180  # convert angles so that 0 degrees is the z axis 
             scan[:, 1][(scan[:, 1] > 180)] -= 360 
             
@@ -374,18 +425,14 @@ class Lidar():
             scan = scan[(scan[:, 0] > self.min_dist) & (scan[:,0] < self.max_dist)]
             scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
 
-            # apply horizontal and vertical bias
-            x, y = PointCloud.pol2cart(scan[:, 0], scan[:, 1])
-            scan[:, 0], scan[:, 1] = PointCloud.cart2pol(x, y)
-
             if self.user_request_data:
                 x, y = PointCloud.pol2cart(scan[:, 0], scan[:, 1])
                 self.buffer.put(np.column_stack((x, y)))
 
             # update cumulative scanning data
             if self.scanning:
-                data_point_time = 0.00 * (scan[:, 1]/360) + (scan_time) - self.start_scan_time 
-                scan_with_time = np.column_stack((scan, data_point_time)) # add third coordinate: time
+                data_point_time = scan_time - self.start_scan_time 
+                scan_with_time = np.column_stack((scan, np.full(scan[:, 0].shape, data_point_time))) # add third coordinate: time
                 self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
 
             if self.kill_thread:
@@ -510,12 +557,10 @@ class Lidar():
         mask = np.ones(x.size).astype('bool')
         
         if self.background_data.size >= 4:
+            background_points = np.column_stack(PointCloud.pol2cart(self.background_data[:, 0], self.background_data[:, 1]))
 
-            if use_calib_params:
-                background_points = np.column_stack(PointCloud.pol2cart(self.background_data[:, 0], self.background_data[:, 1]))
-
-                # remove background points
-                mask = PointCloud.subtract_point_clouds(np.column_stack((x, z)), background_points, 1)
+            # remove background points
+            mask = PointCloud.subtract_point_clouds(np.column_stack((x, z)), background_points, 0.1)
 
         mask = mask & ((z > self.turntable_height) & (x > (self.dist_from_axis - self.TURNTABLE_RADIUS)) & (x < (self.dist_from_axis + self.TURNTABLE_RADIUS)))
         self.curr_scan = self.curr_scan[mask]

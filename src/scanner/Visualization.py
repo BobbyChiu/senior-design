@@ -12,7 +12,7 @@ def plot_dual_3d_clouds(points_3d_1, points_3d_2, color_1, color_2):
     z1 = points_3d_1[:,2]
     trace1 = go.Scatter3d(x=x1, y=y1, z=z1,
                           mode='markers',
-                          marker={'size': 1, 'color': color_1, 'opacity': 0.8})
+                          marker={'size': 2, 'color': color_1, 'opacity': 0.8})
 
     # Second point cloud
     x2 = points_3d_2[:,0]
@@ -20,7 +20,7 @@ def plot_dual_3d_clouds(points_3d_1, points_3d_2, color_1, color_2):
     z2 = points_3d_2[:,2]
     trace2 = go.Scatter3d(x=x2, y=y2, z=z2,
                           mode='markers',
-                          marker={'size': 1, 'color': color_2, 'opacity': 0.8})
+                          marker={'size': 2, 'color': color_2, 'opacity': 0.8})
 
     # Configure the layout.
     layout = go.Layout(margin={'l': 0, 'r': 0, 'b': 0, 't': 0})

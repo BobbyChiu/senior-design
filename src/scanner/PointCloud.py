@@ -128,7 +128,7 @@ def create_rotation_matrix(angles):
 
 def apply_transformation(array, points):
     """
-    Apply the transformation defined by the array to the given points.
+    Apply the transformation defined by the array to the given points, optimized using NumPy.
 
     :param array: A list or tuple of six values, where the first three are shifts and the last three are rotation angles.
     :param points: A list of points (each a tuple or list of three values) to transform.
@@ -140,16 +140,15 @@ def apply_transformation(array, points):
     R = create_rotation_matrix(angles)
     transformation_matrix = np.dot(T, R)
 
-    transformed_points = []
-    for point in points:
-        # Convert point to homogeneous coordinates
-        point_homogeneous = np.array([point[0], point[1], point[2], 1])
-        # Apply transformation
-        transformed_point = np.dot(transformation_matrix, point_homogeneous)
-        # Convert back to 3D coordinates and add to the list
-        transformed_points.append(transformed_point[:3])
+    # Convert points to a NumPy array and add a row of 1s for homogeneous coordinates
+    points_array = np.array(points)
+    points_homogeneous = np.hstack((points_array, np.ones((points_array.shape[0], 1))))
 
-    return transformed_points
+    # Apply transformation to all points at once
+    transformed_points = np.dot(points_homogeneous, transformation_matrix.T)
+
+    # Drop the homogeneous coordinate and return
+    return transformed_points[:, :3]
 
 def subtract_point_clouds(cloud1, cloud2, threshold):
     """
@@ -624,6 +623,8 @@ def mesh_to_stl(mesh, *, folder=None, filename=None):
 
 def stl_to_mesh(filename):
     mesh = o3d.io.read_triangle_mesh(filename)
+    mesh.compute_vertex_normals()
+    mesh.paint_uniform_color([1, 0.706, 0])
     return mesh
 
 def mesh_to_pc(mesh, num_samples=100000):

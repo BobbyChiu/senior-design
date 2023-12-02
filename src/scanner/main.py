@@ -10,7 +10,7 @@ import open3d as o3d
 from traceback import print_exc
 import threading
 
-LIDAR_VERTICAL_SEPARATION = 15.722
+LIDAR_VERTICAL_SEPARATION = 28.9336
 
 def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     lidars = [lidar_top, lidar_bottom]
@@ -43,11 +43,12 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
 
     # calibrate
     calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
-    calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 1000) / 10
+    calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 5000) / 10
     initial_guess = [lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION, # lidar top pos
                     0, 0, 0,  # lidar top angle
                     lidar_bottom.dist_from_axis, 0, 0, # lidar bottom pos
                     0, 0, 0]  # lidar bottom angle
+    
     optimal_params, top_calibration_cloud, bottom_calibration_cloud = calibrate(lidar_top, lidar_bottom, initial_guess, calibration_duck) # make sure scans align
     print(f"Optimal Scanning Params: {optimal_params}")
     plot_dual_3d_clouds(top_calibration_cloud, bottom_calibration_cloud, 'red', 'blue')
@@ -296,8 +297,8 @@ if __name__ == '__main__':
 
 
     input_streamlike = [
-        # ['calibrate', '--calibration-duration', '60'],
-        ['scan', '--scan-duration', '60', '--remove-background'],
+        ['calibrate', '--calibration-duration', '30'],
+        ['scan', '--scan-duration', '30', '--remove-background'],
         ['process'],
         ['generate',
             '--scaling', '1.0',
@@ -316,7 +317,7 @@ if __name__ == '__main__':
         )
 
     
-    lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-45, 0),
+    lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-50, 0),
                                               (10, 50), (-15, 45))
     try:
         with argsource:
@@ -377,7 +378,7 @@ if __name__ == '__main__':
             t = threading.Thread(target=process_commands, daemon=True)
             t.start()
 
-            plot2d_realtime([top_buffer, bottom_buffer], ['red', 'blue'], interval=10, xlim=(0, 50), ylim=(-25, 25))
+            plot2d_realtime([top_buffer, bottom_buffer], ['red', 'blue'], interval=10, xlim=(0, 80), ylim=(-40, 40))
     finally:
         lidar_top.disconnect()
         lidar_bottom.disconnect()

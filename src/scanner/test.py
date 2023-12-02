@@ -12,7 +12,7 @@ import threading
 from main import do_processing_on_point_cloud
 from scipy.optimize import minimize
 
-LIDAR_VERTICAL_SEPARATION = 15.722
+LIDAR_VERTICAL_SEPARATION = 28.9336
 
 def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params=(20, 2)):
 
@@ -112,27 +112,54 @@ def self_aligned_scan(top, bottom):
 
 ############### viz
 
-top_cal = PointCloud.from_file("calibration/top_cal.xyz")
-bot_cal = PointCloud.from_file("calibration/bottom_cal.xyz")
-plot_dual_3d_clouds(top_cal, bot_cal, 'red', 'blue')
+# top_cal = PointCloud.from_file("calibration/top_cal.xyz")
+# bot_cal = PointCloud.from_file("calibration/bottom_cal.xyz")
+# plot_dual_3d_clouds(top_cal, bot_cal, 'red', 'blue')
 
-sandia_pre = PointCloud.from_file("lidar-data-xyz/sandia_voxel_pre.xyz")
-plot3d(sandia_pre)
+# sandia_pre = PointCloud.from_file("lidar-data-xyz/sandia_voxel_pre.xyz")
+# plot3d(sandia_pre)
 
 sandia_post = PointCloud.from_file("lidar-data-xyz/sandia_voxel.xyz")
 plot3d(sandia_post)
 
-mesh = PointCloud.to_mesh(sandia_post)
-showMesh(mesh)
+# mesh = PointCloud.to_mesh(sandia_post)
+# showMesh(mesh)
 
-cube_pre = PointCloud.from_file("lidar-data-xyz/cube_voxel_pre.xyz")
-plot3d(cube_pre)
+# mesh = PointCloud.to_mesh(sandia_post)
+# showMesh(mesh)
+# PointCloud.mesh_to_stl(mesh, folder="stl", filename="ultimate_sandia.stl")
 
-cube_post = PointCloud.from_file("lidar-data-xyz/cube_voxel.xyz")
-plot3d(cube_post)
+# sandia_post = PointCloud.from_file("lidar-data-xyz/express_sandia.xyz")
+# plot3d(sandia_post)
 
-mesh = PointCloud.to_mesh(cube_post)
-showMesh(mesh)
+# mesh = PointCloud.to_mesh(sandia_post)
+# showMesh(mesh)
+
+# cube_pre = PointCloud.from_file("lidar-data-xyz/cube_voxel_pre.xyz")
+# plot3d(cube_pre)
+
+# cube_post = PointCloud.from_file("lidar-data-xyz/cube_voxel.xyz")
+# plot3d(cube_post)
+
+# mesh = PointCloud.stl_to_mesh('stl/first_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/best_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/wide_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/penultimate_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/final_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.to_mesh(cube_post)
+# showMesh(mesh)
+
+
 
 
 # bottom = PointCloud.from_file("calibration/ref-duck-bottom.xyz")
@@ -159,6 +186,9 @@ showMesh(mesh)
 # lidar_bottom.remove_background_on_current()
 # lidar_top.remove_background_on_current()
 
+# pc_top = lidar_top.get3DPointCloud()
+# pc_bottom = lidar_bottom.get3DPointCloud()
+# plot_dual_3d_clouds(pc_top, pc_bottom, 'red', 'blue')
 
 
 # #  calibrate
