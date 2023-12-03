@@ -249,7 +249,7 @@ void MainWindow::on_processScanButton_clicked()
 
 void MainWindow::on_scanBgButton_clicked()
 {
-    QString command = QString("get-background --background_duration %1").arg(ui->scanBgSlider->value());
+    QString command = QString("get-background --background-duration %1").arg(ui->scanBgSlider->value());
     qDebug() << command;
     sendData(command);
     qDebug() << receiveData();
@@ -272,6 +272,7 @@ void MainWindow::on_checkBox_2_stateChanged(int arg1)
 {
     QString command("test --toggle-test");
     qDebug() << command;
+    sendData(command);
     qDebug() << receiveData();
 }
 
