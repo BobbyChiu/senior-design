@@ -20,7 +20,7 @@
       <x>0</x>
       <y>0</y>
       <width>801</width>
-      <height>321</height>
+      <height>241</height>
      </rect>
     </property>
     <property name="styleSheet">
@@ -140,6 +140,12 @@
         <height>16</height>
        </rect>
       </property>
+      <property name="minimum">
+       <number>1</number>
+      </property>
+      <property name="maximum">
+       <number>100</number>
+      </property>
       <property name="value">
        <number>30</number>
       </property>
@@ -181,7 +187,7 @@
        </rect>
       </property>
       <property name="text">
-       <string>Scan Background Duration (sec): 30 </string>
+       <string>Scan Background Duration (sec): 10</string>
       </property>
      </widget>
      <widget class="QSlider" name="scanBgSlider">
@@ -192,6 +198,15 @@
         <width>160</width>
         <height>16</height>
        </rect>
+      </property>
+      <property name="minimum">
+       <number>1</number>
+      </property>
+      <property name="maximum">
+       <number>100</number>
+      </property>
+      <property name="value">
+       <number>10</number>
       </property>
       <property name="orientation">
        <enum>Qt::Horizontal</enum>
@@ -234,7 +249,7 @@
       <property name="geometry">
        <rect>
         <x>340</x>
-        <y>60</y>
+        <y>40</y>
         <width>121</width>
         <height>20</height>
        </rect>
@@ -247,7 +262,7 @@
       <property name="geometry">
        <rect>
         <x>322</x>
-        <y>85</y>
+        <y>65</y>
         <width>160</width>
         <height>16</height>
        </rect>
@@ -266,7 +281,7 @@
       <property name="geometry">
        <rect>
         <x>360</x>
-        <y>140</y>
+        <y>120</y>
         <width>80</width>
         <height>24</height>
        </rect>
@@ -305,7 +320,7 @@
       <property name="geometry">
        <rect>
         <x>340</x>
-        <y>110</y>
+        <y>90</y>
         <width>131</width>
         <height>22</height>
        </rect>
@@ -313,18 +328,8 @@
       <property name="text">
        <string>Remove Background</string>
       </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox_2">
-      <property name="geometry">
-       <rect>
-        <x>330</x>
-        <y>190</y>
-        <width>121</width>
-        <height>22</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Enable Test Mode</string>
+      <property name="checked">
+       <bool>true</bool>
       </property>
      </widget>
     </widget>
@@ -332,9 +337,9 @@
      <widget class="QLabel" name="label_15">
       <property name="geometry">
        <rect>
-        <x>365</x>
+        <x>330</x>
         <y>10</y>
-        <width>71</width>
+        <width>141</width>
         <height>16</height>
        </rect>
       </property>
@@ -344,13 +349,13 @@
        </font>
       </property>
       <property name="text">
-       <string>Process Scan</string>
+       <string>Process Point Cloud Data</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_6">
       <property name="geometry">
        <rect>
-        <x>423</x>
+        <x>433</x>
         <y>50</y>
         <width>111</width>
         <height>16</height>
@@ -363,7 +368,7 @@
      <widget class="QLabel" name="label_8">
       <property name="geometry">
        <rect>
-        <x>423</x>
+        <x>433</x>
         <y>82</y>
         <width>121</width>
         <height>16</height>
@@ -376,7 +381,7 @@
      <widget class="QLabel" name="label_3">
       <property name="geometry">
        <rect>
-        <x>205</x>
+        <x>215</x>
         <y>29</y>
         <width>161</width>
         <height>16</height>
@@ -394,46 +399,46 @@
      <widget class="QLineEdit" name="gaussianSigma">
       <property name="geometry">
        <rect>
-        <x>460</x>
+        <x>470</x>
         <y>80</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>1</string>
+       <string/>
       </property>
      </widget>
      <widget class="QLineEdit" name="removeStatisticalOutliersNumPoints">
       <property name="geometry">
        <rect>
-        <x>290</x>
+        <x>300</x>
         <y>45</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>8 0.5</string>
+       <string>20</string>
       </property>
      </widget>
      <widget class="QLineEdit" name="gaussianK">
       <property name="geometry">
        <rect>
-        <x>461</x>
+        <x>471</x>
         <y>45</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>9</string>
+       <string/>
       </property>
      </widget>
      <widget class="QLabel" name="label_4">
       <property name="geometry">
        <rect>
-        <x>205</x>
+        <x>215</x>
         <y>50</y>
         <width>101</width>
         <height>16</height>
@@ -446,7 +451,7 @@
      <widget class="QLabel" name="label_5">
       <property name="geometry">
        <rect>
-        <x>422</x>
+        <x>432</x>
         <y>30</y>
         <width>151</width>
         <height>16</height>
@@ -490,7 +495,7 @@
      <widget class="Line" name="line">
       <property name="geometry">
        <rect>
-        <x>400</x>
+        <x>410</x>
         <y>30</y>
         <width>20</width>
         <height>111</height>
@@ -503,20 +508,20 @@
      <widget class="QPushButton" name="processScanButton">
       <property name="geometry">
        <rect>
-        <x>360</x>
+        <x>330</x>
         <y>170</y>
-        <width>80</width>
+        <width>141</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>Process Scan</string>
+       <string>Process Point Cloud Data</string>
       </property>
      </widget>
      <widget class="QCheckBox" name="checkBoxAddTop">
       <property name="geometry">
        <rect>
-        <x>240</x>
+        <x>420</x>
         <y>146</y>
         <width>77</width>
         <height>22</height>
@@ -525,11 +530,14 @@
       <property name="text">
        <string>Add Top</string>
       </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
      </widget>
      <widget class="QCheckBox" name="checkBoxAddBottom">
       <property name="geometry">
        <rect>
-        <x>130</x>
+        <x>320</x>
         <y>146</y>
         <width>91</width>
         <height>22</height>
@@ -538,11 +546,14 @@
       <property name="text">
        <string>Add Bottom</string>
       </property>
+      <property name="checked">
+       <bool>true</bool>
+      </property>
      </widget>
      <widget class="QLabel" name="label_17">
       <property name="geometry">
        <rect>
-        <x>206</x>
+        <x>216</x>
         <y>83</y>
         <width>101</width>
         <height>16</height>
@@ -555,7 +566,7 @@
      <widget class="QLabel" name="label_18">
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>20</x>
         <y>30</y>
         <width>161</width>
         <height>16</height>
@@ -573,7 +584,7 @@
      <widget class="QLabel" name="label_19">
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>20</x>
         <y>50</y>
         <width>101</width>
         <height>16</height>
@@ -586,7 +597,7 @@
      <widget class="QLabel" name="label_20">
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>20</x>
         <y>80</y>
         <width>101</width>
         <height>16</height>
@@ -599,17 +610,20 @@
      <widget class="QLineEdit" name="removeStatisticalOutliersStdRatio">
       <property name="geometry">
        <rect>
-        <x>290</x>
+        <x>300</x>
         <y>80</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
+      <property name="text">
+       <string>2</string>
+      </property>
      </widget>
      <widget class="QLineEdit" name="removeRadiusOutliersNumPoints">
       <property name="geometry">
        <rect>
-        <x>80</x>
+        <x>90</x>
         <y>46</y>
         <width>113</width>
         <height>24</height>
@@ -619,7 +633,7 @@
      <widget class="QLineEdit" name="removeRadiusOutliersRadius">
       <property name="geometry">
        <rect>
-        <x>80</x>
+        <x>90</x>
         <y>80</y>
         <width>113</width>
         <height>24</height>
@@ -629,7 +643,7 @@
      <widget class="QLabel" name="label_21">
       <property name="geometry">
        <rect>
-        <x>590</x>
+        <x>600</x>
         <y>30</y>
         <width>151</width>
         <height>16</height>
@@ -647,7 +661,7 @@
      <widget class="QLabel" name="label_22">
       <property name="geometry">
        <rect>
-        <x>590</x>
+        <x>600</x>
         <y>50</y>
         <width>111</width>
         <height>16</height>
@@ -660,7 +674,7 @@
      <widget class="QLabel" name="label_23">
       <property name="geometry">
        <rect>
-        <x>590</x>
+        <x>600</x>
         <y>80</y>
         <width>121</width>
         <height>16</height>
@@ -673,7 +687,7 @@
      <widget class="QLabel" name="label_24">
       <property name="geometry">
        <rect>
-        <x>590</x>
+        <x>600</x>
         <y>114</y>
         <width>121</width>
         <height>16</height>
@@ -686,46 +700,46 @@
      <widget class="QLineEdit" name="bilateralK">
       <property name="geometry">
        <rect>
-        <x>670</x>
+        <x>660</x>
         <y>46</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>9</string>
+       <string/>
       </property>
      </widget>
      <widget class="QLineEdit" name="bilateralSigmaS">
       <property name="geometry">
        <rect>
-        <x>670</x>
+        <x>660</x>
         <y>80</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>9</string>
+       <string/>
       </property>
      </widget>
      <widget class="QLineEdit" name="bilateralSigmaN">
       <property name="geometry">
        <rect>
-        <x>670</x>
+        <x>660</x>
         <y>112</y>
         <width>113</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>9</string>
+       <string/>
       </property>
      </widget>
      <widget class="Line" name="line_3">
       <property name="geometry">
        <rect>
-        <x>190</x>
+        <x>200</x>
         <y>30</y>
         <width>20</width>
         <height>111</height>
@@ -738,7 +752,7 @@
      <widget class="Line" name="line_4">
       <property name="geometry">
        <rect>
-        <x>570</x>
+        <x>581</x>
         <y>30</y>
         <width>20</width>
         <height>111</height>
@@ -772,7 +786,7 @@
       <property name="geometry">
        <rect>
         <x>365</x>
-        <y>60</y>
+        <y>50</y>
         <width>113</width>
         <height>24</height>
        </rect>
@@ -785,7 +799,7 @@
       <property name="geometry">
        <rect>
         <x>294</x>
-        <y>63</y>
+        <y>53</y>
         <width>49</width>
         <height>16</height>
        </rect>
@@ -798,7 +812,7 @@
       <property name="geometry">
        <rect>
         <x>365</x>
-        <y>130</y>
+        <y>120</y>
         <width>113</width>
         <height>24</height>
        </rect>
@@ -808,7 +822,7 @@
       <property name="geometry">
        <rect>
         <x>292</x>
-        <y>134</y>
+        <y>124</y>
         <width>71</width>
         <height>16</height>
        </rect>
@@ -821,7 +835,7 @@
       <property name="geometry">
        <rect>
         <x>293</x>
-        <y>100</y>
+        <y>90</y>
         <width>71</width>
         <height>16</height>
        </rect>
@@ -834,7 +848,7 @@
       <property name="geometry">
        <rect>
         <x>365</x>
-        <y>97</y>
+        <y>87</y>
         <width>113</width>
         <height>24</height>
        </rect>
@@ -867,6 +881,32 @@
       </property>
      </widget>
     </widget>
+   </widget>
+   <widget class="QCheckBox" name="checkBox_2">
+    <property name="geometry">
+     <rect>
+      <x>340</x>
+      <y>250</y>
+      <width>121</width>
+      <height>22</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string>Enable Test Mode</string>
+    </property>
+   </widget>
+   <widget class="QLabel" name="appOutput">
+    <property name="geometry">
+     <rect>
+      <x>10</x>
+      <y>280</y>
+      <width>781</width>
+      <height>51</height>
+     </rect>
+    </property>
+    <property name="text">
+     <string/>
+    </property>
    </widget>
   </widget>
   <widget class="QMenuBar" name="menubar">

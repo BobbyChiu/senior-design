@@ -75,7 +75,8 @@ void MainWindow::on_calibrateButton_clicked()
     QString command = QString("calibrate --calibration-duration %1").arg(ui->calibrationDurationSlider->value());
     qDebug() << command;
     sendData(command);
-    qDebug() << receiveData();
+    // qDebug() << receiveData();
+    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 
 }
 void MainWindow::on_calibrationDurationSlider_valueChanged(int value)
@@ -95,7 +96,8 @@ void MainWindow::on_actionOpen_Scan_from_Device_triggered()
         QString command = QString("open --open-xyz %1").arg(filePath);
         qDebug() << command;
         sendData(command);
-        qDebug() << receiveData();
+        // qDebug() << receiveData();
+        ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
         ui->centralwidget->findChild<QStackedWidget *>("stackedWidget")->setCurrentIndex(2);
     }
     else{
@@ -114,7 +116,8 @@ void MainWindow::on_scanButton_clicked()
     }
     qDebug() << command;
     sendData(command);
-    qDebug() << receiveData();
+    // qDebug() << receiveData();
+    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 }
 
 
@@ -122,7 +125,8 @@ void MainWindow::on_checkBox_stateChanged(int arg1)
 {
 
     QString removeBackgroundState = QString("state changed: %1").arg(arg1);
-    qDebug() << removeBackgroundState;
+    // qDebug() << removeBackgroundState;
+    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 
 }
 
@@ -132,13 +136,18 @@ void MainWindow::on_generateButton_clicked()
     QString command("generate");
 
     command += " --scaling " + ui->scalingInput->text();
+    if (!(ui->stlSaveInput->text().isEmpty())){
+        command += " --save-as-stl " + ui->stlSaveInput->text();
+    }
 
-    command += " --save-as-stl " + ui->stlSaveInput->text();
-    command += " --save-as-xyz " + ui->xyzSaveInput->text();
+    if (!(ui->xyzSaveInput->text().isEmpty())){
+        command += " --save-as-xyz " + ui->xyzSaveInput->text();
+    }
 
     qDebug() << command;
     sendData(command);
-    qDebug() << receiveData();
+    // qDebug() << receiveData();
+    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 }
 
 void MainWindow::sendData(const QString &str)
@@ -222,16 +231,21 @@ void MainWindow::on_prev3_clicked()
 void MainWindow::on_processScanButton_clicked()
 {
     QString command("process");
+    if (!(ui->removeRadiusOutliersNumPoints->text().isEmpty() && ui->removeRadiusOutliersRadius->text().isEmpty())){
+        command += " --remove-radius-outlier " + ui->removeRadiusOutliersNumPoints->text() + " " + ui->removeRadiusOutliersRadius->text();
+    }
 
-    command += " --remove-radius-outlier " + ui->removeRadiusOutliersNumPoints->text() + " " + ui->removeRadiusOutliersRadius->text();
+    if (!(ui->removeStatisticalOutliersNumPoints->text().isEmpty() && ui->removeStatisticalOutliersStdRatio->text().isEmpty())){
+        command += " --remove-statistical-outlier " + ui->removeStatisticalOutliersNumPoints->text() + " " + ui->removeStatisticalOutliersStdRatio->text();
+    }
 
-    command += " --remove-statistical-outlier " + ui->removeStatisticalOutliersNumPoints->text() + " " + ui->removeStatisticalOutliersStdRatio->text();
+    if (!(ui->gaussianK->text().isEmpty() && ui->gaussianSigma->text().isEmpty())){
+        command += " --gaussian " + ui->gaussianK->text() + " " + ui->gaussianSigma->text();
+    }
 
-
-    // TODO: Find a way to make this optional?
-    command += " --gaussian " + ui->gaussianK->text() + " " + ui->gaussianSigma->text();
-
-    command += " --bilateral " + ui->bilateralK->text() + " " + ui->bilateralSigmaS->text() + " " + ui->bilateralSigmaN->text();
+    if (!(ui->bilateralK->text().isEmpty() && ui->bilateralSigmaS->text().isEmpty() && ui->bilateralSigmaN->text().isEmpty())){
+        command += " --bilateral " + ui->bilateralK->text() + " " + ui->bilateralSigmaS->text() + " " + ui->bilateralSigmaN->text();
+    }
 
     if (ui->checkBoxAddBottom->isChecked()){
         command += " --add-bottom";
@@ -243,7 +257,8 @@ void MainWindow::on_processScanButton_clicked()
 
     qDebug() << command;
     sendData(command);
-    qDebug() << receiveData();
+    // qDebug() << receiveData();
+    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 }
 
 
@@ -252,7 +267,8 @@ void MainWindow::on_scanBgButton_clicked()
     QString command = QString("get-background --background-duration %1").arg(ui->scanBgSlider->value());
     qDebug() << command;
     sendData(command);
-    qDebug() << receiveData();
+    // qDebug() << receiveData();
+    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 }
 
 
@@ -273,6 +289,7 @@ void MainWindow::on_checkBox_2_stateChanged(int arg1)
     QString command("test --toggle-test");
     qDebug() << command;
     sendData(command);
-    qDebug() << receiveData();
+    // qDebug() << receiveData();
+    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 }
 
