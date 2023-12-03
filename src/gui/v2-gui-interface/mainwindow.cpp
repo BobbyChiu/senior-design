@@ -80,7 +80,7 @@ void MainWindow::on_calibrateButton_clicked()
 }
 void MainWindow::on_calibrationDurationSlider_valueChanged(int value)
 {
-    ui->calibrationDurationLabel->setText(QString("Calibration Duration (sec): %1").arg(value));
+    ui->calibrationDurationLabel->setText(QString("Scan Calibration Duration (sec): %1").arg(value));
 }
 
 
@@ -107,6 +107,11 @@ void MainWindow::on_actionOpen_Scan_from_Device_triggered()
 void MainWindow::on_scanButton_clicked()
 {
     QString command = QString("scan --scan-duration %1").arg(ui->scanDurationSlider->value());
+
+    if (ui->checkBox->isChecked())
+    {
+        command += " --remove-background";
+    }
     qDebug() << command;
     sendData(command);
     qDebug() << receiveData();
@@ -218,18 +223,55 @@ void MainWindow::on_processScanButton_clicked()
 {
     QString command("process");
 
-    if (ui->checkBox->isChecked())
-    {
-        command += " --remove-background";
-    }
+    command += " --remove-radius-outlier " + ui->removeRadiusOutliersNumPoints->text() + " " + ui->removeRadiusOutliersRadius->text();
 
-    command += " --k-nn-thresholding " + ui->knnThresholdingInputs->text();
+    command += " --remove-statistical-outlier " + ui->removeStatisticalOutliersNumPoints->text() + " " + ui->removeStatisticalOutliersStdRatio->text();
+
 
     // TODO: Find a way to make this optional?
-    command += " --gaussian " + ui->meanInput->text() + " " + ui->stdDevInput->text();
+    command += " --gaussian " + ui->gaussianK->text() + " " + ui->gaussianSigma->text();
+
+    command += " --bilateral " + ui->bilateralK->text() + " " + ui->bilateralSigmaS->text() + " " + ui->bilateralSigmaN->text();
+
+    if (ui->checkBoxAddBottom->isChecked()){
+        command += " --add-bottom";
+    }
+
+    if (ui->checkBoxAddTop->isChecked()){
+        command += " --add-top";
+    }
 
     qDebug() << command;
     sendData(command);
+    qDebug() << receiveData();
+}
+
+
+void MainWindow::on_scanBgButton_clicked()
+{
+    QString command = QString("get-background --background_duration %1").arg(ui->scanBgSlider->value());
+    qDebug() << command;
+    sendData(command);
+    qDebug() << receiveData();
+}
+
+
+void MainWindow::on_scanBgSlider_valueChanged(int value)
+{
+    ui->scanBgDurationLabel->setText(QString("Scan Background Duration (sec): %1").arg(value));
+}
+
+
+void MainWindow::on_checkBoxAddTop_stateChanged(int arg1)
+{
+
+}
+
+
+void MainWindow::on_checkBox_2_stateChanged(int arg1)
+{
+    QString command("test --toggle-test");
+    qDebug() << command;
     qDebug() << receiveData();
 }
 

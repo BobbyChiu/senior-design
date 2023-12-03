@@ -54,6 +54,14 @@ private slots:
 
     void on_processScanButton_clicked();
 
+    void on_scanBgButton_clicked();
+
+    void on_scanBgSlider_valueChanged(int value);
+
+    void on_checkBoxAddTop_stateChanged(int arg1);
+
+    void on_checkBox_2_stateChanged(int arg1);
+
 private:
     void sendData(const QString &str);
 

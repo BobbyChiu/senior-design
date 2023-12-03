@@ -20,14 +20,14 @@
       <x>0</x>
       <y>0</y>
       <width>801</width>
-      <height>301</height>
+      <height>321</height>
      </rect>
     </property>
     <property name="styleSheet">
      <string notr="true"/>
     </property>
     <property name="currentIndex">
-     <number>0</number>
+     <number>1</number>
     </property>
     <widget class="QWidget" name="page">
      <widget class="QPushButton" name="page2">
@@ -109,33 +109,33 @@
       <property name="geometry">
        <rect>
         <x>173</x>
-        <y>70</y>
-        <width>80</width>
+        <y>130</y>
+        <width>101</width>
         <height>24</height>
        </rect>
       </property>
       <property name="text">
-       <string>Calibrate</string>
+       <string>Calibrate Scan</string>
       </property>
      </widget>
      <widget class="QLabel" name="calibrationDurationLabel">
       <property name="geometry">
        <rect>
         <x>9</x>
-        <y>52</y>
+        <y>112</y>
         <width>191</width>
         <height>16</height>
        </rect>
       </property>
       <property name="text">
-       <string>Calibration Duration (sec): 30 </string>
+       <string>Scan Calibration Duration (sec): 30 </string>
       </property>
      </widget>
      <widget class="QSlider" name="calibrationDurationSlider">
       <property name="geometry">
        <rect>
         <x>9</x>
-        <y>75</y>
+        <y>135</y>
         <width>160</width>
         <height>16</height>
        </rect>
@@ -169,6 +169,45 @@
       </property>
       <property name="text">
        <string>Existing Scan</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="scanBgDurationLabel">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>50</y>
+        <width>191</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Scan Background Duration (sec): 30 </string>
+      </property>
+     </widget>
+     <widget class="QSlider" name="scanBgSlider">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>73</y>
+        <width>160</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Horizontal</enum>
+      </property>
+     </widget>
+     <widget class="QPushButton" name="scanBgButton">
+      <property name="geometry">
+       <rect>
+        <x>172</x>
+        <y>69</y>
+        <width>101</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Scan Background</string>
       </property>
      </widget>
     </widget>
@@ -227,7 +266,7 @@
       <property name="geometry">
        <rect>
         <x>360</x>
-        <y>110</y>
+        <y>140</y>
         <width>80</width>
         <height>24</height>
        </rect>
@@ -262,6 +301,32 @@
        <string>Prev</string>
       </property>
      </widget>
+     <widget class="QCheckBox" name="checkBox">
+      <property name="geometry">
+       <rect>
+        <x>340</x>
+        <y>110</y>
+        <width>131</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Remove Background</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="checkBox_2">
+      <property name="geometry">
+       <rect>
+        <x>330</x>
+        <y>190</y>
+        <width>121</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Enable Test Mode</string>
+      </property>
+     </widget>
     </widget>
     <widget class="QWidget" name="page_3">
      <widget class="QLabel" name="label_15">
@@ -285,35 +350,35 @@
      <widget class="QLabel" name="label_6">
       <property name="geometry">
        <rect>
-        <x>416</x>
+        <x>423</x>
         <y>50</y>
         <width>111</width>
         <height>16</height>
        </rect>
       </property>
       <property name="text">
-       <string>Num.  Neighbors</string>
+       <string>K</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_8">
       <property name="geometry">
        <rect>
-        <x>416</x>
-        <y>80</y>
+        <x>423</x>
+        <y>82</y>
         <width>121</width>
         <height>16</height>
        </rect>
       </property>
       <property name="text">
-       <string>Gaussian Std Deviation</string>
+       <string>Sigma</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_3">
       <property name="geometry">
        <rect>
-        <x>165</x>
+        <x>205</x>
         <y>29</y>
-        <width>101</width>
+        <width>161</width>
         <height>16</height>
        </rect>
       </property>
@@ -323,13 +388,13 @@
        </font>
       </property>
       <property name="text">
-       <string>Filtering Options</string>
+       <string>Remove Statistical Outliers</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="stdDevInput">
+     <widget class="QLineEdit" name="gaussianSigma">
       <property name="geometry">
        <rect>
-        <x>542</x>
+        <x>460</x>
         <y>80</y>
         <width>113</width>
         <height>24</height>
@@ -339,10 +404,10 @@
        <string>1</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="knnThresholdingInputs">
+     <widget class="QLineEdit" name="removeStatisticalOutliersNumPoints">
       <property name="geometry">
        <rect>
-        <x>270</x>
+        <x>290</x>
         <y>45</y>
         <width>113</width>
         <height>24</height>
@@ -352,10 +417,10 @@
        <string>8 0.5</string>
       </property>
      </widget>
-     <widget class="QLineEdit" name="meanInput">
+     <widget class="QLineEdit" name="gaussianK">
       <property name="geometry">
        <rect>
-        <x>543</x>
+        <x>461</x>
         <y>45</y>
         <width>113</width>
         <height>24</height>
@@ -368,20 +433,20 @@
      <widget class="QLabel" name="label_4">
       <property name="geometry">
        <rect>
-        <x>165</x>
+        <x>205</x>
         <y>50</y>
         <width>101</width>
         <height>16</height>
        </rect>
       </property>
       <property name="text">
-       <string>KNN Thresholding</string>
+       <string>Num Points</string>
       </property>
      </widget>
      <widget class="QLabel" name="label_5">
       <property name="geometry">
        <rect>
-        <x>415</x>
+        <x>422</x>
         <y>30</y>
         <width>151</width>
         <height>16</height>
@@ -393,20 +458,7 @@
        </font>
       </property>
       <property name="text">
-       <string>Smoothening Options</string>
-      </property>
-     </widget>
-     <widget class="QCheckBox" name="checkBox">
-      <property name="geometry">
-       <rect>
-        <x>333</x>
-        <y>146</y>
-        <width>131</width>
-        <height>22</height>
-       </rect>
-      </property>
-      <property name="text">
-       <string>Remove Background</string>
+       <string>Gaussian</string>
       </property>
      </widget>
      <widget class="QPushButton" name="page4">
@@ -438,7 +490,7 @@
      <widget class="Line" name="line">
       <property name="geometry">
        <rect>
-        <x>389</x>
+        <x>400</x>
         <y>30</y>
         <width>20</width>
         <height>111</height>
@@ -459,6 +511,241 @@
       </property>
       <property name="text">
        <string>Process Scan</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="checkBoxAddTop">
+      <property name="geometry">
+       <rect>
+        <x>240</x>
+        <y>146</y>
+        <width>77</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Add Top</string>
+      </property>
+     </widget>
+     <widget class="QCheckBox" name="checkBoxAddBottom">
+      <property name="geometry">
+       <rect>
+        <x>130</x>
+        <y>146</y>
+        <width>91</width>
+        <height>22</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Add Bottom</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_17">
+      <property name="geometry">
+       <rect>
+        <x>206</x>
+        <y>83</y>
+        <width>101</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Standard Ratio</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_18">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>30</y>
+        <width>161</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="text">
+       <string>Remove Radius Outliers</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_19">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>50</y>
+        <width>101</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Num Points</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_20">
+      <property name="geometry">
+       <rect>
+        <x>10</x>
+        <y>80</y>
+        <width>101</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Radius</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="removeStatisticalOutliersStdRatio">
+      <property name="geometry">
+       <rect>
+        <x>290</x>
+        <y>80</y>
+        <width>113</width>
+        <height>24</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="removeRadiusOutliersNumPoints">
+      <property name="geometry">
+       <rect>
+        <x>80</x>
+        <y>46</y>
+        <width>113</width>
+        <height>24</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="removeRadiusOutliersRadius">
+      <property name="geometry">
+       <rect>
+        <x>80</x>
+        <y>80</y>
+        <width>113</width>
+        <height>24</height>
+       </rect>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_21">
+      <property name="geometry">
+       <rect>
+        <x>590</x>
+        <y>30</y>
+        <width>151</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="font">
+       <font>
+        <bold>true</bold>
+       </font>
+      </property>
+      <property name="text">
+       <string>Bilateral</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_22">
+      <property name="geometry">
+       <rect>
+        <x>590</x>
+        <y>50</y>
+        <width>111</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>K</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_23">
+      <property name="geometry">
+       <rect>
+        <x>590</x>
+        <y>80</y>
+        <width>121</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Sigma (S)</string>
+      </property>
+     </widget>
+     <widget class="QLabel" name="label_24">
+      <property name="geometry">
+       <rect>
+        <x>590</x>
+        <y>114</y>
+        <width>121</width>
+        <height>16</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>Sigma (N)</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="bilateralK">
+      <property name="geometry">
+       <rect>
+        <x>670</x>
+        <y>46</y>
+        <width>113</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>9</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="bilateralSigmaS">
+      <property name="geometry">
+       <rect>
+        <x>670</x>
+        <y>80</y>
+        <width>113</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>9</string>
+      </property>
+     </widget>
+     <widget class="QLineEdit" name="bilateralSigmaN">
+      <property name="geometry">
+       <rect>
+        <x>670</x>
+        <y>112</y>
+        <width>113</width>
+        <height>24</height>
+       </rect>
+      </property>
+      <property name="text">
+       <string>9</string>
+      </property>
+     </widget>
+     <widget class="Line" name="line_3">
+      <property name="geometry">
+       <rect>
+        <x>190</x>
+        <y>30</y>
+        <width>20</width>
+        <height>111</height>
+       </rect>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
+      </property>
+     </widget>
+     <widget class="Line" name="line_4">
+      <property name="geometry">
+       <rect>
+        <x>570</x>
+        <y>30</y>
+        <width>20</width>
+        <height>111</height>
+       </rect>
+      </property>
+      <property name="orientation">
+       <enum>Qt::Vertical</enum>
       </property>
      </widget>
     </widget>
