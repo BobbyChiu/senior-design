@@ -12,18 +12,19 @@ import threading
 
 LIDAR_VERTICAL_SEPARATION = 15.722
 
-def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
+def do_get_background(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     lidars = [lidar_top, lidar_bottom]
-    background_collection_time = 10
+    background_collection_time = kwargs['background_duration']
     # get background
     print(f"START BACKGROUND COLLECTION, DURATION: {background_collection_time} s")
     start_stop_scan(lidars, background_collection_time)
     dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
     lidar_top.set_current_to_background(estimate_params=False)
     lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
-    
-    # TODO : what to do about this???? we need a separate 'get_background' step
-    input("Done getting background: press enter to start calibrating")
+
+
+def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
+    lidars = [lidar_top, lidar_bottom]
 
     # get calibration scans
     print(f"START CALIBRATION, DURATION: {kwargs['calibration_duration']} s")
@@ -60,9 +61,6 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
 
     # save calibration data
     PointCloud.to_file(optimal_params, folder="calibration", filename="calibration.data")
-
-    # TODO : what to do about this????
-    input("Done calibration: press enter to start scanning")
 
 
 def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
@@ -111,7 +109,6 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
     pc_top = lidar_top.get3DPointCloud()
 
     pc_final = np.vstack((pc_bottom, pc_top))
-    
     # save pc_final before processing
     PointCloud.to_file(pc_final, folder="lidar-data-xyz")
 
@@ -124,11 +121,6 @@ def do_processing_on_point_cloud(pc, **kwargs):
     pc = PointCloud.get_surface_points(pc, voxel_size=0.1)
 
     # open3d statistical outlier remover
-    kwargs['remove_statistical_outlier'] = { # TODO: add this parameter
-        'nb_neighbors' : 20,
-        'std_ratio' : 2
-    }
-
     stat_args = kwargs.get('remove_statistical_outlier')
     if stat_args:
         pcd = o3d.geometry.PointCloud()
@@ -149,25 +141,27 @@ def do_processing_on_point_cloud(pc, **kwargs):
         pcd = pcd.select_by_index(ind)
         pc = np.asarray(pcd.points)
 
-    # filtering to remove outliers
-    knn_args = kwargs.get('k_nn_thresholding')
-    if knn_args:
-        for k, threshold in knn_args.items():
-            mask = PointCloud.knn_filter(pc, k, threshold)
-            pc = pc[mask[:, 0]]
+    # # filtering to remove outliers
+    # knn_args = kwargs.get('k_nn_thresholding')
+    # if knn_args:
+    #     for k, threshold in knn_args.items():
+    #         mask = PointCloud.knn_filter(pc, k, threshold)
+    #         pc = pc[mask[:, 0]]
 
     # smoothening
     gaussian_args = kwargs.get('gaussian')
     if gaussian_args:
-        pc = PointCloud.gaussian_filter_radius(pc, gaussian_args['k'], gaussian_args['sigma'] / 10)
+        pc = PointCloud.gaussian_filter_radius(pc, gaussian_args['k'], gaussian_args['sigma'])
+
+    bilateral_args = kwargs.get('bilateral')
+    if bilateral_args:
         estimated_normals = PointCloud.estimate_normals(pc, radius=1)
         pc = PointCloud.bilateral_filter_point_cloud(pc, 
                                                      estimated_normals, 
-                                                    radius=gaussian_args['k'], 
-                                                    sigma_s= gaussian_args['sigma'], 
-                                                    sigma_n=0.001)   
+                                                    radius=bilateral_args['k'], 
+                                                    sigma_s=bilateral_args['sigma_s'], 
+                                                    sigma_n=bilateral_args['sigma_n'])   
 
-    kwargs['add_bottom'] = True # TODO: add this parameter
     if kwargs.get('add_bottom'):
         # add flat bottom surface
         pc = PointCloud.add_bottom_surface(pc, 
@@ -176,16 +170,15 @@ def do_processing_on_point_cloud(pc, **kwargs):
                                         grid_spacing=0.1, 
                                         crop=True)
     
-    # kwargs['add_top'] = True # TODO: add this parameter
-    # if kwargs.get('add_top'):
-    #     # add flat top surface
-    #     pc[:, 2] = - pc[:, 2]
-    #     pc = PointCloud.add_bottom_surface(pc, 
-    #                                     z_percentile=1,
-    #                                     percent_height=1,
-    #                                     grid_spacing=0.1,
-    #                                     crop=True)
-    #     pc[:, 2] = - pc[:, 2]
+    if kwargs.get('add_top'):
+        # add flat top surface
+        pc[:, 2] = - pc[:, 2]
+        pc = PointCloud.add_bottom_surface(pc, 
+                                        z_percentile=1,
+                                        percent_height=1,
+                                        grid_spacing=0.1,
+                                        crop=True)
+        pc[:, 2] = - pc[:, 2]
         
     plot3d(pc)
     return pc
@@ -221,6 +214,10 @@ if __name__ == '__main__':
     arg_sources = ['script', 'socket']
     launch_parser.add_argument('--args-from', default='script', choices=arg_sources, help=f'how to run commands, {arg_sources}', metavar='TYPE')
 
+    # Get background arguments
+    background_parser = argparse.ArgumentParser(add_help=False)
+    background_parser.add_argument('--background-duration', type=float, help='get background duration in seconds', metavar='SECONDS')
+
     # Calibration arguments
     calibration_parser = argparse.ArgumentParser(add_help=False)
     calibration_parser.add_argument('--calibration-duration', type=float, help='calibration duration in seconds', metavar='SECONDS')
@@ -238,9 +235,13 @@ if __name__ == '__main__':
     process_parser = argparse.ArgumentParser(add_help=False)
     # Filtering
     process_parser.add_argument('--remove-radius-outlier', nargs=2, help='remove points with not enough neighbors given by a number of points and radius in centimeters', metavar=('NUMBER_OF_POINTS', 'RADIUS'))
-    process_parser.add_argument('--k-nn-thresholding', nargs='*', help='apply sequential k-nearest neighbor filtering given by space-separated list of space-separated k and threshold', metavar='K THRESHOLD ')
+    process_parser.add_argument('--remove-statistical-outlier', nargs=2, help='remove points that are sparse given by a number of points and standard deviation', metavar=('NUMBER_OF_POINTS', 'STDEV'))
+    # process_parser.add_argument('--k-nn-thresholding', nargs='*', help='apply sequential k-nearest neighbor filtering given by space-separated list of space-separated k and threshold', metavar='K THRESHOLD ')
     # Smoothening
     process_parser.add_argument('--gaussian', nargs=2, help='apply gaussian filter given by space-separated k and sigma', metavar=('K', 'SIGMA'))
+    process_parser.add_argument('--bilateral', nargs=3, help='apply bilateral filter given by space-separated k, sigma_s, sigma_n', metavar=('K', 'SIGMA_S', 'SIGMA_N'))
+    process_parser.add_argument('--add-bottom', action='store_true', help='add flat bottom surface')
+    process_parser.add_argument('--add-top', action='store_true', help='add flat top surface')
 
     # Generation arguments
     generation_parser = argparse.ArgumentParser(add_help=False)
@@ -248,15 +249,22 @@ if __name__ == '__main__':
     generation_parser.add_argument('--save-as-stl', type=pathlib.Path, help='stl file to save to', metavar='STL_FILE')
     generation_parser.add_argument('--save-as-xyz', type=pathlib.Path, help='xyz file to save to', metavar='XYZ_FILE')
 
-    parser = argparse.ArgumentParser(parents=[calibration_parser, scan_parser, open_parser, process_parser, generation_parser], exit_on_error=False)
-    actions = ['!help', 'calibrate', 'scan', 'open', 'process', 'generate', '!quit']
+    # Test mode arguments
+    test_parser = argparse.ArgumentParser(add_help=False)
+    test_parser.add_argument('--toggle-test', action='store_true', help='toggle test mode (live scan viewer, disables data collection)')
+
+    parser = argparse.ArgumentParser(parents=[background_parser, calibration_parser, scan_parser, open_parser, process_parser, generation_parser, test_parser], exit_on_error=False)
+    actions = ['!help', 'get-background', 'calibrate', 'scan', 'open', 'process', 'generate', 'test', '!quit']
     parser.add_argument('do', nargs='?', default='!help', choices=actions, help=f'action to take, {actions}', metavar='ACTION')
     parser.add_argument('ignore', nargs='*', default=[], help='other positional arguments after the first are ignored')
 
     def parse_arguments(arguments: list[str]) -> dict:
         args_dict = vars(parser.parse_intermixed_args(arguments))
         args_dict['do'] = args_dict['do']
-        if args_dict['do'] == 'calibrate':
+        if args_dict['do'] == 'get-background':
+            if not args_dict['background_duration']:
+                raise KeyError('Background duration is required')
+        elif args_dict['do'] == 'calibrate':
             if not args_dict['calibration_duration']:
                 raise KeyError('Calibration duration is required')
         elif args_dict['do'] == 'scan':
@@ -274,16 +282,24 @@ if __name__ == '__main__':
                     'radius': float(rrad_args[1]),
                 }
 
-            # K-nn thresholding
-            knn_args = args_dict['k_nn_thresholding']
-            if knn_args:
-                if len(knn_args) % 2 != 0:
-                    raise ValueError(f'Number of K-nn arguments must be even but is {len(knn_args)}')
-                knn_list = [{
-                    'k': int(knn_args[i]),
-                    'threshold': float(knn_args[i + 1]),
-                } for i in range(0, len(knn_args), 2)]
-                args_dict['k_nn_thresholding'] = knn_list
+            # Remove statistical outlier
+            rrad_args = args_dict['remove_statistical_outlier']
+            if rrad_args:
+                args_dict['remove_statistical_outlier'] = {
+                    'nb_neighbors': int(rrad_args[0]),
+                    'std_ratio': float(rrad_args[1]),
+                }
+
+            # # K-nn thresholding
+            # knn_args = args_dict['k_nn_thresholding']
+            # if knn_args:
+            #     if len(knn_args) % 2 != 0:
+            #         raise ValueError(f'Number of K-nn arguments must be even but is {len(knn_args)}')
+            #     knn_list = [{
+            #         'k': int(knn_args[i]),
+            #         'threshold': float(knn_args[i + 1]),
+            #     } for i in range(0, len(knn_args), 2)]
+            #     args_dict['k_nn_thresholding'] = knn_list
 
             # Gaussian filter
             gaussian_args = args_dict['gaussian']
@@ -293,22 +309,45 @@ if __name__ == '__main__':
                     'sigma': float(gaussian_args[1]),
                 }
 
+            # Bilateral filter
+            bilateral_args = args_dict['bilateral']
+            if bilateral_args:
+                args_dict['bilateral'] = {
+                    'k': int(bilateral_args[0]),
+                    'sigma_s': float(bilateral_args[1]),
+                    'sigma_n': float(bilateral_args[2]),
+                }
+
         elif args_dict['do'] == 'generate':
             if not args_dict['save_as_stl'] and not args_dict['save_as_xyz']:
                 raise KeyError('Save file is required')
+
+        elif args_dict['do'] == 'test':
+            if not args_dict['toggle_test']:
+                raise KeyError('"--toggle-test" flag is required')
 
         return args_dict
 
 
     input_streamlike = [
-        # ['calibrate', '--calibration-duration', '60'],
+        ['get-background', '--background-duration', '10'],
+        ['calibrate', '--calibration-duration', '60'],
         ['scan', '--scan-duration', '60', '--remove-background'],
-        ['process'],
+        ['process',
+            # '--remove-radius-outlier', '?', '?',
+            '--remove-statistical-outlier', '20', '2',
+            # '--gaussian', '?', '?',
+            # '--bilateral', '?', '?', '0.001',
+            '--add-bottom',
+            '--add-top',
+        ],
         ['generate',
             '--scaling', '1.0',
             '--save-as-stl', 'stl/latest_stl.stl',
             '--save-as-xyz', 'lidar-data-xyz/latest_pc.xyz',
         ],
+        ['test', '--toggle-test'],
+        ['test', '--toggle-test'],
     ]
 
 
@@ -329,6 +368,9 @@ if __name__ == '__main__':
             pc_raw = None
             pc_processed = None
             mesh = None
+
+            test_mode = False
+
             for arguments in argsource.command_generator():
                 output_string = ''
                 try:
@@ -338,32 +380,45 @@ if __name__ == '__main__':
                     # Do action
                     if arg_dict['do'] == '!help':
                         output_string = parser.format_help()
-                    elif arg_dict['do'] == 'calibrate':
-                        do_calibration(lidar_bottom, lidar_top, **arg_dict)
-                        output_string = 'Calibrate finished.'
-                    elif arg_dict['do'] == 'scan':
-                        pc_raw = do_scan(lidar_bottom, lidar_top, **arg_dict)
-                        output_string = 'Scan finished.'
-                    elif arg_dict['do'] == 'open':
-                        pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
-                        output_string = 'Open finished.'
-                    elif arg_dict['do'] == 'process':
-                        pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
-                        output_string = 'Process finished.'
-                    elif arg_dict['do'] == 'generate':
-                        mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
-                        do_generate_files(pc=pc_processed, 
-                                        lidar_bottom=lidar_bottom, 
-                                        lidar_top=lidar_top,
-                                        mesh=mesh,
-                                        **arg_dict)
-                        output_string = 'Generate finished.'
                     elif arg_dict['do'] == '!quit':
                         # Exit condition
                         output_string = '!quit'
                         break
+                    elif test_mode:
+                        if arg_dict['do'] == 'test' and arg_dict['toggle_test']:
+                            test_mode = False
+                            output_string = 'Changed test mode to disabled.'
+                        else:
+                            raise ValueError('Test mode is currently enabled. Disable test mode to enable other commands.')
                     else:
-                        raise ValueError(f'unknown ACTION: {arg_dict["do"]}')
+                        if arg_dict['do'] == 'get-background':
+                            do_get_background(lidar_bottom, lidar_top, **arg_dict)
+                            output_string = 'Getting background finished.'
+                        elif arg_dict['do'] == 'calibrate':
+                            do_calibration(lidar_bottom, lidar_top, **arg_dict)
+                            output_string = 'Calibrate finished.'
+                        elif arg_dict['do'] == 'scan':
+                            pc_raw = do_scan(lidar_bottom, lidar_top, **arg_dict)
+                            output_string = 'Scan finished.'
+                        elif arg_dict['do'] == 'open':
+                            pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
+                            output_string = 'Open finished.'
+                        elif arg_dict['do'] == 'process':
+                            pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
+                            output_string = 'Process finished.'
+                        elif arg_dict['do'] == 'generate':
+                            mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
+                            do_generate_files(pc=pc_processed,
+                                              lidar_bottom=lidar_bottom,
+                                              lidar_top=lidar_top,
+                                              mesh=mesh,
+                                              **arg_dict)
+                            output_string = 'Generate finished.'
+                        elif arg_dict['do'] == 'test' and arg_dict['toggle_test']:
+                            test_mode = True
+                            output_string = 'Changed test mode to enabled.'
+                        else:
+                            raise ValueError(f'unknown ACTION: {arg_dict["do"]}')
                 except Exception as e:
                     print_exc()
                     output_string = f'{str(e)}\nType "!help" for actions and arguments.\n'
