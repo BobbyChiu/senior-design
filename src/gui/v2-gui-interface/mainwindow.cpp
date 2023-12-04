@@ -8,6 +8,7 @@
 void MainWindow::startServer() {
     //QString pythonScript = ".\\..\\netstring-client\\netstring-client.py";
     QDir::setCurrent(".\\..\\..\\scanner");
+//    QDir::setCurrent(".\\..\\scanner");
     QString run_scanner = "run_scanner.bat";
     process.startDetached(run_scanner);
     //process.startDetached("python", QStringList() << pythonScript);
@@ -126,7 +127,7 @@ void MainWindow::on_checkBox_stateChanged(int arg1)
 
     QString removeBackgroundState = QString("state changed: %1").arg(arg1);
     // qDebug() << removeBackgroundState;
-    ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
+    //ui->appOutput->setText(QString("Received data from client: %1").arg(receiveData()));
 
 }
 
