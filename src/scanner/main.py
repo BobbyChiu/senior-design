@@ -1,6 +1,6 @@
 import PointCloud
 from Lidar import Lidar, start_stop_scan, calibrate, auto_get_lidars
-from Visualization import plot3d, showMesh, plot2d_realtime, plot_dual_3d_clouds
+from Visualization import plot3d, showMesh, plot2d_realtime, plot_dual_3d_clouds, RealTimePlotWindow
 import ArgSource
 import time
 import argparse
@@ -9,8 +9,68 @@ import numpy as np
 import open3d as o3d
 from traceback import print_exc
 import threading
+from PyQt5.QtWidgets import QApplication
+import sys
 
 LIDAR_VERTICAL_SEPARATION = 15.722
+kill_test_thread = False
+
+def calibrate_from_file(lidar_top: Lidar, lidar_bottom: Lidar):
+    #read in calibration data
+    top_background = PointCloud.from_file("calibration/top_background.xyz")
+    bottom_background = PointCloud.from_file("calibration/bottom_background.xyz")
+
+    # set backgrounds
+    lidar_top.curr_scan = top_background
+    lidar_bottom.curr_scan = bottom_background
+
+    # set background params
+    dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
+    lidar_top.set_current_to_background(estimate_params=False)
+    lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
+
+    # set calibration data
+    optimal_params =  PointCloud.from_file("calibration/calibration.data")
+    lidar_top.set_params(np.append(optimal_params[0:3], optimal_params[6:9]))
+    lidar_bottom.set_params(np.append(optimal_params[3:6], optimal_params[9:12]))
+    print("Using previous calibration data")
+
+def do_test_mode(lidar_top: Lidar, lidar_bottom: Lidar, mainWin : RealTimePlotWindow):
+    calibrate_from_file(lidar_top, lidar_bottom)
+    begin_time = time.time()
+    lidar_bottom.curr_scan = np.empty((0, 3))
+    lidar_top.curr_scan = np.empty((0, 3))
+    lidar_top.startScan(begin_time)
+    lidar_bottom.startScan(begin_time)
+    while not kill_test_thread:
+        cycle_time = time.time()
+        while time.time() - cycle_time < 15:
+            if kill_test_thread:
+                return
+            time.sleep(0.001)
+        lidar_top.stopScan()
+        lidar_bottom.stopScan()
+
+        pc_combined = np.vstack((mainWin.pc1_top, mainWin.pc1_bottom))
+        proc_params = {'remove_statistical_outlier' : {
+                            'nb_neighbors' : 20,
+                            'std_ratio' : 2,
+                        }
+                        }
+        pc_final = do_processing_on_point_cloud(pc_combined, **proc_params)
+        mainWin.set_plot_3d(pc_final, plot_num=2)
+        mesh = PointCloud.to_mesh(pc_final)
+        mainWin.update_mesh_image(mesh)
+
+        if time.time() - begin_time > 60:
+            mainWin.clear_plot_3d(1)
+            begin_time = time.time()
+            lidar_top.startScan()
+            lidar_bottom.startScan()
+        else:
+            lidar_top.resumeScan()
+            lidar_bottom.resumeScan()
+
 
 def do_get_background(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     lidars = [lidar_top, lidar_bottom]
@@ -66,28 +126,7 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
 def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
 
     if lidar_top.pos[0] == 0 or lidar_bottom.pos[0] == 0:
-        #read in calibration data
-        top_background = PointCloud.from_file("calibration/top_background.xyz")
-        bottom_background = PointCloud.from_file("calibration/bottom_background.xyz")
-
-        # set backgrounds
-        lidar_top.curr_scan = top_background
-        lidar_bottom.curr_scan = bottom_background
-
-        # set background params
-        dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
-        lidar_top.set_current_to_background(estimate_params=False)
-        lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
-
-        # set calibration data
-        optimal_params =  PointCloud.from_file("calibration/calibration.data")
-        lidar_top.set_params(np.append(optimal_params[0:3], optimal_params[6:9]))
-        lidar_bottom.set_params(np.append(optimal_params[3:6], optimal_params[9:12]))
-        print("Using previous calibration data")
-
-    # Prepare for scanning
-    print("10 Seconds till scanning. Place object on turntable.")
-    time.sleep(10)
+        calibrate_from_file(lidar_top, lidar_bottom)
 
     scan_duration = kwargs['scan_duration']
     print(f"Scanning for {scan_duration} seconds")
@@ -330,8 +369,8 @@ if __name__ == '__main__':
 
 
     input_streamlike = [
-        ['get-background', '--background-duration', '10'],
-        ['calibrate', '--calibration-duration', '60'],
+        # ['get-background', '--background-duration', '10'],
+        # ['calibrate', '--calibration-duration', '60'],
         ['scan', '--scan-duration', '60', '--remove-background'],
         ['process',
             # '--remove-radius-outlier', '?', '?',
@@ -362,6 +401,7 @@ if __name__ == '__main__':
     
     lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-30, 0),
                                               (10, 50), (-15, 45))
+    mainWin = None
     with argsource:
         def process_commands():
             # Keep state
@@ -369,7 +409,9 @@ if __name__ == '__main__':
             pc_processed = None
             mesh = None
 
+            global kill_test_thread
             test_mode = False
+            test_thread = None
 
             for arguments in argsource.command_generator():
                 output_string = ''
@@ -387,6 +429,8 @@ if __name__ == '__main__':
                     elif test_mode:
                         if arg_dict['do'] == 'test' and arg_dict['toggle_test']:
                             test_mode = False
+                            kill_test_thread = True
+                            test_thread.join()
                             output_string = 'Changed test mode to disabled.'
                         else:
                             raise ValueError('Test mode is currently enabled. Disable test mode to enable other commands.')
@@ -404,7 +448,7 @@ if __name__ == '__main__':
                             pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
                             output_string = 'Open finished.'
                         elif arg_dict['do'] == 'process':
-                            if not pc_raw:
+                            if pc_raw is None:
                                 raise RuntimeError('No raw point cloud. Perform a scan or open a point cloud file first.')
                             pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
                             output_string = 'Process finished.'
@@ -421,6 +465,10 @@ if __name__ == '__main__':
                         elif arg_dict['do'] == 'test' and arg_dict['toggle_test']:
                             test_mode = True
                             output_string = 'Changed test mode to enabled.'
+                            test_thread = threading.Thread(target=do_test_mode, 
+                                                                args=(lidar_top, lidar_bottom, mainWin))
+                            kill_test_thread = False
+                            test_thread.start()
                         else:
                             raise ValueError(f'unknown ACTION: {arg_dict["do"]}')
                 except Exception as e:
@@ -435,10 +483,11 @@ if __name__ == '__main__':
             # run in separate thread since Matplotlib requires the main thread
             t = threading.Thread(target=process_commands, daemon=True)
             t.start()
-            plot2d_realtime([top_buffer, bottom_buffer], [(230, 216, 173), (173, 216, 230)], 
-                            interval=50, 
-                            xlim=(20, 40), 
-                            ylim=(-10, 10), bias=LIDAR_VERTICAL_SEPARATION)
+            
+            app = QApplication(sys.argv)
+            mainWin = RealTimePlotWindow(top_buffer, bottom_buffer, [(255, 216, 173), (173, 216, 230)])
+            mainWin.show()
+            sys.exit(app.exec_())
         finally:
             lidar_bottom.disconnect()
             lidar_top.disconnect()

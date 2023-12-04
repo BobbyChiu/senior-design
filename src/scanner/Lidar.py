@@ -65,6 +65,42 @@ def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params
     # pc[:, 2] = - pc[:, 2]
     return pc
 
+# def plot_3d_point_cloud(buffer, update_interval=1):
+#     """
+#     Function to update a 3D point cloud plot with data from a buffer.
+    
+#     Parameters:
+#     - buffer (Queue): A queue containing the LIDAR data.
+#     - update_interval (float): Time interval (in seconds) for updating the plot.
+#     """
+
+#     # Initialize the 3D plot
+#     fig = go.FigureWidget(data=[go.Scatter3d(x=[], y=[], z=[], mode='markers')])
+    
+#     def update_plot():
+#         while True:
+#             if not buffer.empty():
+#                 # Retrieve data from the buffer
+#                 data = buffer.get()
+#                 if data is None:
+#                     break  # End the loop if a None is received
+                
+#                 # Assuming the data is an ndarray of shape (N, 3) where N is the number of points
+#                 if isinstance(data, np.ndarray) and data.shape[1] == 3:
+#                     fig.data[0].x = data[:, 0]
+#                     fig.data[0].y = data[:, 1]
+#                     fig.data[0].z = data[:, 2]
+#                     fig.update_layout(scene=dict(aspectmode='data'))
+            
+#             # Update the plot at regular intervals
+#             time.sleep(update_interval)
+
+#     # Start the thread
+#     plot_thread = threading.Thread(target=update_plot)
+#     plot_thread.start()
+
+#     return fig
+
 def start_stop_scan(lidars, scan_time):
     start_time = time.time()
     for l in lidars:
@@ -328,7 +364,7 @@ def calibrate_lidars(lidar_top, lidar_bottom, initial_guess, ref):
         # disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
         # disalignment_loss = 0
 
-        regularization = np.sum((np.subtract(np.delete(params[0:12], 2), np.delete(initial_guess[0:12], 2))**2))
+        regularization = np.sum((np.subtract(params[0:12]), initial_guess[0:12])**2)
 
         loss = reconstrction_loss + regularization/32 #+ reconstrction_loss_bottom + reconstrction_loss_top
         # print(f"rec: {reconstrction_loss}, top: {reconstrction_loss_top}, bottom: {reconstrction_loss_bottom}")
@@ -402,7 +438,7 @@ class Lidar():
         self.max_dist = dist_lim[1]
         self.min_ang = angle_lim[0]
         self.max_ang = angle_lim[1]
-        self.angular_speed = 0
+        self.angular_speed = 33
         self.dist_from_axis = 0
         self.turntable_height = 0
         self.start_scan_time = None
@@ -451,15 +487,17 @@ class Lidar():
             scan = scan[(scan[:, 0] > self.min_dist) & (scan[:,0] < self.max_dist)]
             scan = scan[(scan[:, 1] > self.min_ang) & (scan[:, 1] < self.max_ang)]
 
+            # update cumulative scanning data
+            data_point_time = scan_time - self.start_scan_time 
+            scan_with_time = np.column_stack((scan, np.full(scan[:, 0].shape, data_point_time))) # add third coordinate: time
+            self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
+
             if self.user_request_data:
                 x, y = PointCloud.pol2cart(scan[:, 0], scan[:, 1])
-                self.buffer.put(np.column_stack((x, y)))
-
-            # update cumulative scanning data
-            if self.scanning:
-                data_point_time = scan_time - self.start_scan_time 
-                scan_with_time = np.column_stack((scan, np.full(scan[:, 0].shape, data_point_time))) # add third coordinate: time
-                self.curr_scan = np.vstack((self.curr_scan, scan_with_time))
+                self.buffer['2d'].put(np.column_stack((x, y)))
+                # convert to 3D points and put in buffer
+                new_points = self.get3DPointCloud(scan=scan_with_time, angular_speed=self.angular_speed)
+                self.buffer['3d'].put(new_points)
 
             if self.kill_thread:
                 self.lidar.stop()
@@ -476,12 +514,8 @@ class Lidar():
         else:
             self.start_scan_time = start_time
 
-        self.kill_thread = False
         self.curr_scan = np.empty((0, 3))
-        self.scanning = True
-        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
-        self.scan_thread.start()
-        
+        self.resumeScan()
 
     def stopScan(self):
         """Stop the scan.
@@ -489,6 +523,17 @@ class Lidar():
         self.kill_thread = True
         self.scan_thread.join()
         self.scanning = False
+
+    def resumeScan(self):
+        """Resume the current scan, keeping previous scan data.
+        """
+        if self.scanning:
+            raise("Already Scanning")
+
+        self.kill_thread = False
+        self.scanning = True
+        self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
+        self.scan_thread.start()
 
     # estimates and sets the angular bias assuming the current scan is a vertical line
     # returns the horizontal distance to the vertical line after rotating it
@@ -616,7 +661,7 @@ class Lidar():
         thread_function : Callable
             Function to run while plotting.
         """
-        self.buffer = Queue()
+        self.buffer = {'2d' : Queue(), '3d': Queue(), '3d_1' : Queue()}
         self.user_request_data = True
         return self.buffer
 
@@ -643,9 +688,7 @@ class Lidar():
 
         if angular_speed == None:
             # estimate angular speed
-            self.angular_speed = estimate_angular_speed(scan)
-        else:
-            self.angular_speed = angular_speed
+            angular_speed = estimate_angular_speed(scan)
 
         if pos == None:
             pos = self.pos
@@ -653,7 +696,7 @@ class Lidar():
         if angular_pos == None:
             angular_pos = self.angular_pos
 
-        result = lidar2d_to_3d(scan, self.angular_speed, pos=pos, 
+        result = lidar2d_to_3d(scan, angular_speed, pos=pos, 
                                         angular_pos=angular_pos)
 
         return result
