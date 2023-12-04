@@ -404,9 +404,13 @@ if __name__ == '__main__':
                             pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
                             output_string = 'Open finished.'
                         elif arg_dict['do'] == 'process':
+                            if not pc_raw:
+                                raise RuntimeError('No raw point cloud. Perform a scan or open a point cloud file first.')
                             pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
                             output_string = 'Process finished.'
                         elif arg_dict['do'] == 'generate':
+                            if not pc_processed:
+                                raise RuntimeError('No processed point cloud. Perform a process first.')
                             mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
                             do_generate_files(pc=pc_processed,
                                               lidar_bottom=lidar_bottom,
