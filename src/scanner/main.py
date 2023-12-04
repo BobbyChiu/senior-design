@@ -10,7 +10,7 @@ import open3d as o3d
 from traceback import print_exc
 import threading
 
-LIDAR_VERTICAL_SEPARATION = 28.9336
+LIDAR_VERTICAL_SEPARATION = 15.722
 
 def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     lidars = [lidar_top, lidar_bottom]
@@ -42,11 +42,13 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     PointCloud.to_file(lidar_bottom.background_data, folder="calibration", filename="bottom_background.xyz")
 
     # calibrate
+    # calibration_duck = PointCloud.stl_to_mesh('calibration/ultimate_sandia.stl')
+    # calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 5000)
     calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
     calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 5000) / 10
     initial_guess = [lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION, # lidar top pos
+                    lidar_bottom.dist_from_axis, 0, 0,
                     0, 0, 0,  # lidar top angle
-                    lidar_bottom.dist_from_axis, 0, 0, # lidar bottom pos
                     0, 0, 0]  # lidar bottom angle
     
     optimal_params, top_calibration_cloud, bottom_calibration_cloud = calibrate(lidar_top, lidar_bottom, initial_guess, calibration_duck) # make sure scans align
@@ -81,8 +83,8 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
 
         # set calibration data
         optimal_params =  PointCloud.from_file("calibration/calibration.data")
-        lidar_top.set_params(params=optimal_params[0:6])
-        lidar_bottom.set_params(params=optimal_params[6:12])
+        lidar_top.set_params(np.append(optimal_params[0:3], optimal_params[6:9]))
+        lidar_bottom.set_params(np.append(optimal_params[3:6], optimal_params[9:12]))
         print("Using previous calibration data")
 
     # Prepare for scanning
@@ -94,16 +96,16 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
     start_stop_scan([lidar_top, lidar_bottom], scan_duration)
 
     # save scans before background removal
-    # PointCloud.to_file(lidar_bottom.curr_scan, folder="lidar-data-2d", filename="scan_bottom.xyz")
-    # PointCloud.to_file(lidar_top.curr_scan, folder="lidar-data-2d", filename="scan_top.xyz")
+    PointCloud.to_file(lidar_bottom.curr_scan, folder="lidar-data-2d", filename="scan_bottom.xyz")
+    PointCloud.to_file(lidar_top.curr_scan, folder="lidar-data-2d", filename="scan_top.xyz")
 
     # if kwargs['remove_background']:
     lidar_bottom.remove_background_on_current(use_calib_params=True)
     lidar_top.remove_background_on_current(use_calib_params=True)
 
     # save scans after background removal
-    # PointCloud.to_file(lidar_bottom.curr_scan, folder="lidar-data-2d", filename="scan_bottom.xyz")
-    # PointCloud.to_file(lidar_top.curr_scan, folder="lidar-data-2d", filename="scan_top.xyz")
+    PointCloud.to_file(lidar_bottom.curr_scan, folder="lidar-data-2d", filename="scan_bottom.xyz")
+    PointCloud.to_file(lidar_top.curr_scan, folder="lidar-data-2d", filename="scan_top.xyz")
 
     pc_bottom = lidar_bottom.get3DPointCloud()
     pc_top = lidar_top.get3DPointCloud()
@@ -118,7 +120,24 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
 
 
 def do_processing_on_point_cloud(pc, **kwargs):
+
     pc = PointCloud.get_surface_points(pc, voxel_size=0.1)
+
+    # open3d statistical outlier remover
+    kwargs['remove_statistical_outlier'] = { # TODO: add this parameter
+        'nb_neighbors' : 20,
+        'std_ratio' : 2
+    }
+
+    stat_args = kwargs.get('remove_statistical_outlier')
+    if stat_args:
+        pcd = o3d.geometry.PointCloud()
+        pcd.points = o3d.utility.Vector3dVector(pc)
+        # statistical outlier removal
+        cl, ind = pcd.remove_statistical_outlier(nb_neighbors=stat_args['nb_neighbors'], 
+                                                std_ratio=stat_args['std_ratio'])
+        pcd = pcd.select_by_index(ind)
+        pc = np.asarray(pcd.points)
 
     # open3d radius outlier removal
     rrad_args = kwargs.get('remove_radius_outlier')
@@ -127,21 +146,6 @@ def do_processing_on_point_cloud(pc, **kwargs):
         pcd.points = o3d.utility.Vector3dVector(pc)
         # radius outlier removal
         cl, ind = pcd.remove_radius_outlier(nb_points=rrad_args['nb_points'], radius=rrad_args['radius'])
-        pcd = pcd.select_by_index(ind)
-        pc = np.asarray(pcd.points)
-
-    # open3d statistical outlier remover
-    kwargs['remove_statistical_outlier'] = { # TODO: add this parameter
-        'nb_neighbors' : 20,
-        'std_ratio' : 2
-    }
-    stat_args = kwargs.get('remove_statistical_outlier')
-    if stat_args:
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pc)
-        # statistical outlier removal
-        cl, ind = pcd.remove_statistical_outlier(nb_neighbors=stat_args['nb_neighbors'], 
-                                                std_ratio=stat_args['std_ratio'])
         pcd = pcd.select_by_index(ind)
         pc = np.asarray(pcd.points)
 
@@ -172,16 +176,16 @@ def do_processing_on_point_cloud(pc, **kwargs):
                                         grid_spacing=0.1, 
                                         crop=True)
     
-    kwargs['add_top'] = True # TODO: add this parameter
-    if kwargs.get('add_top'):
-        # add flat top surface
-        pc[:, 2] = - pc[:, 2]
-        pc = PointCloud.add_bottom_surface(pc, 
-                                        z_percentile=1,
-                                        percent_height=1,
-                                        grid_spacing=0.1,
-                                        crop=True)
-        pc[:, 2] = - pc[:, 2]
+    # kwargs['add_top'] = True # TODO: add this parameter
+    # if kwargs.get('add_top'):
+    #     # add flat top surface
+    #     pc[:, 2] = - pc[:, 2]
+    #     pc = PointCloud.add_bottom_surface(pc, 
+    #                                     z_percentile=1,
+    #                                     percent_height=1,
+    #                                     grid_spacing=0.1,
+    #                                     crop=True)
+    #     pc[:, 2] = - pc[:, 2]
         
     plot3d(pc)
     return pc
@@ -297,8 +301,8 @@ if __name__ == '__main__':
 
 
     input_streamlike = [
-        ['calibrate', '--calibration-duration', '30'],
-        ['scan', '--scan-duration', '30', '--remove-background'],
+        # ['calibrate', '--calibration-duration', '60'],
+        ['scan', '--scan-duration', '60', '--remove-background'],
         ['process'],
         ['generate',
             '--scaling', '1.0',
@@ -317,7 +321,7 @@ if __name__ == '__main__':
         )
 
     
-    lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-50, 0),
+    lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-30, 0),
                                               (10, 50), (-15, 45))
     with argsource:
         def process_commands():
@@ -325,7 +329,6 @@ if __name__ == '__main__':
             pc_raw = None
             pc_processed = None
             mesh = None
-
             for arguments in argsource.command_generator():
                 output_string = ''
                 try:
@@ -366,13 +369,20 @@ if __name__ == '__main__':
                     output_string = f'{str(e)}\nType "!help" for actions and arguments.\n'
                 finally:
                     argsource.output_string(output_string)
+        try:
+            top_buffer = lidar_top.get_buffer()
+            bottom_buffer = lidar_bottom.get_buffer()
 
-        top_buffer = lidar_top.get_buffer()
-        bottom_buffer = lidar_bottom.get_buffer()
+            # run in separate thread since Matplotlib requires the main thread
+            t = threading.Thread(target=process_commands, daemon=True)
+            t.start()
+            plot2d_realtime([top_buffer, bottom_buffer], [(230, 216, 173), (173, 216, 230)], 
+                            interval=50, 
+                            xlim=(20, 40), 
+                            ylim=(-10, 10), bias=LIDAR_VERTICAL_SEPARATION)
+        finally:
+            lidar_bottom.disconnect()
+            lidar_top.disconnect()
 
-        # run in separate thread since Matplotlib requires the main thread
-        t = threading.Thread(target=process_commands, daemon=True)
-        t.start()
-        plot2d_realtime([top_buffer, bottom_buffer], ['red', 'blue'], interval=50, xlim=(0, 80), ylim=(-40, 40))
 
 

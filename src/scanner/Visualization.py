@@ -4,8 +4,6 @@ from PyQt5.QtCore import QTimer
 import sys
 import plotly
 import plotly.graph_objs as go
-from matplotlib import pyplot as plt
-from matplotlib.animation import FuncAnimation
 import open3d as o3d
 import numpy as np
 
@@ -59,9 +57,10 @@ def plot3d(points_3d):
     # Render the plot
     plotly.offline.iplot(plot_figure)
 
-def plot2d_realtime(buffers, colors, interval=25, xlim=(0, 80), ylim=(-40, 40)):
+def plot2d_realtime(buffers, colors, interval=25, xlim=(0, 80), ylim=(-40, 40), bias=0):
     app = QApplication([])
     win = pg.GraphicsLayoutWidget(show=True)
+    win.setBackground((50, 50, 50))
     plot = win.addPlot()
     plot.setXRange(*xlim)
     plot.setYRange(*ylim)

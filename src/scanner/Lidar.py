@@ -12,6 +12,7 @@ from serial.serialutil import SerialTimeoutException
 from sklearn.decomposition import PCA
 import open3d as o3d
 import serial.tools.list_ports
+import sys
 
 def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params=(20, 2)):
 
@@ -74,16 +75,14 @@ def start_stop_scan(lidars, scan_time):
 
 def calibrate(lidar_top, lidar_bottom, initial_guess, ref_obj):
     optimized_params, pc_top_cal, pc_bottom_cal = calibrate_lidars(
-                                        lidar_top.curr_scan, 
-                                        lidar_bottom.curr_scan, 
+                                        lidar_top, 
+                                        lidar_bottom, 
                                         initial_guess=initial_guess,
                                         ref=ref_obj)
     
     # apply optimal params
-    top_params = optimized_params[0:6]
-    lidar_top.set_params(top_params)
-    bottom_params = optimized_params[6:12]
-    lidar_bottom.set_params(bottom_params)
+    lidar_top.set_params(np.append(optimized_params[0:3], optimized_params[6:9]))
+    lidar_bottom.set_params(np.append(optimized_params[3:6], optimized_params[9:12]))
     return optimized_params, pc_top_cal, pc_bottom_cal
 
 def auto_get_lidars(top_dist_lim, top_ang_lim, bot_dist_lim, bot_ang_lim):
@@ -271,45 +270,74 @@ def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
 pc_combined = None
 pc_top = None
 pc_bottom = None
-def calibrate_lidars(top_scan, bottom_scan, initial_guess, ref):
-    angular_speed_top = estimate_angular_speed(top_scan)
-    angular_speed_bottom = estimate_angular_speed(bottom_scan)
-    initial_guess = np.append(initial_guess, [0, 0, 0, 0, 0 ,0])
+def calibrate_lidars(lidar_top, lidar_bottom, initial_guess, ref):
+    angular_speed_top = estimate_angular_speed(lidar_top.curr_scan)
+    angular_speed_bottom = estimate_angular_speed(lidar_bottom.curr_scan)
+    initial_guess = np.append(initial_guess, [0, 0, 0, 0, 0, 0])
 
+    ref_height = ref[:, 2].max() - ref[:, 2].min()
+    ref_min = ref[:,2].min()
+    ref_no_bottom = ref[ref[:, 2] > (ref_min + ref_height * 0.1)]
+    ref_no_bottom = ref_no_bottom - ref_no_bottom.mean()
+    # ref_no_bottom = ref_no_bottom - ref_no_bottom.mean()
     def loss_function(params):
         global pc_combined
         global pc_bottom
         global pc_top
+
         pos_top = params[0:3]
-        angle_top = params[3:6]
-        pos_bottom = params[6:9]
+        pos_bottom = params[3:6]
+        angle_top = params[6:9]
         angle_bottom = params[9:12]
         transformation = params[12:18]
 
         # current scan estimate
-        pc_top = lidar2d_to_3d(top_scan, angular_speed_top, pos=pos_top, angular_pos=angle_top)
-        pc_bottom = lidar2d_to_3d(bottom_scan, angular_speed_bottom, pos=pos_bottom, angular_pos=angle_bottom)
-
-        # make sure point clouds are aligned    
-        pc_combined = np.vstack((pc_top, pc_bottom))
-        # pc_combined = post_processing(pc_combined)
+        pc_top = lidar2d_to_3d(lidar_top.curr_scan, angular_speed_top, pos=pos_top, angular_pos=angle_top)
+        pc_bottom = lidar2d_to_3d(lidar_bottom.curr_scan, angular_speed_bottom, pos=pos_bottom, angular_pos=angle_bottom)
+        pc_ref = np.vstack((pc_top, pc_bottom))
 
         # find error due to difference between reference scans and reference object 
-        pc_ref = PointCloud.apply_transformation(transformation, pc_combined)
-        reconstrction_loss = PointCloud.chamfer_distance(pc_ref, ref)
+        pc_ref = PointCloud.apply_transformation(transformation, pc_ref)
+
+        # pcd = o3d.geometry.PointCloud()
+        # pcd.points = o3d.utility.Vector3dVector(pc_ref)
+        # downpcd = pcd.voxel_down_sample(voxel_size=0.05)
+        # pc_ref = np.asarray(downpcd.points)
+
+        # reconstrction_loss_pre = PointCloud.chamfer_distance(pc_ref, ref) 
+        # if reconstrction_loss_pre < 5:
+        #     pc_ref = PointCloud.add_bottom_surface(pc_ref, 
+        #                     z_percentile=1, 
+        #                     percent_height=1, 
+        #                     grid_spacing=0.1, 
+        #                     crop=True)
+        # pc_ref = PointCloud.get_surface_points(pc_ref, voxel_size=0.1)
+            # add flat bottom surface
+        # pc_ref = PointCloud.add_bottom_surface(pc_ref, 
+        #                                 z_percentile=1, 
+        #                                 percent_height=1, 
+        #                                 grid_spacing=0.1, 
+        #                                 crop=True)
+
+        # reconstrction_loss_top = PointCloud.chamfer_distance(pc_top, ref_no_bottom, only_a_to_b=True)
+        # reconstrction_loss_bottom = PointCloud.chamfer_distance(pc_bottom, ref_no_bottom, only_a_to_b=True)
+        reconstrction_loss = PointCloud.chamfer_distance(pc_ref, ref_no_bottom, only_a_to_b=True)
+        # alignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom) 
         
         # find error due to disalignment between the two current top and bottom scans
-        disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
+        # disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
+        # disalignment_loss = 0
 
-        regularization = np.sum((np.subtract(params[0:12], initial_guess[0:12]))**2)
-        loss = reconstrction_loss + disalignment_loss + regularization / 2
+        regularization = np.sum((np.subtract(np.delete(params[0:12], 2), np.delete(initial_guess[0:12], 2))**2))
 
-        print(f"reg loss: {reconstrction_loss}, d loss: {disalignment_loss}")
-        print(loss)
+        loss = reconstrction_loss + regularization/32 #+ reconstrction_loss_bottom + reconstrction_loss_top
+        # print(f"rec: {reconstrction_loss}, top: {reconstrction_loss_top}, bottom: {reconstrction_loss_bottom}")
+        print(f"rec: {reconstrction_loss}")
         return loss
     
 
-    optimized_params = minimize(loss_function, initial_guess, method='SLSQP').x
+    optimized_params = minimize(loss_function, initial_guess, method='Powell').x
+    optimized_params = np.array(optimized_params) 
     print("Calibration parameters:", optimized_params)
     return optimized_params, pc_top, pc_bottom
 
@@ -396,13 +424,19 @@ class Lidar():
         If self.scanning is true, then self.curr_scan contains raw lidar data.
         This thread can be killed by setting self.kill_thread to true.
         """
+
         # start scan
+        self.lidar.connect()
+        info = self.lidar.get_info()
+        health = self.lidar.get_health()
         self.scan_generator = self.lidar.iter_scans(scan_type='express', max_buf_meas=3000)
 
         for scan in self.scan_generator:
             # add data to plotting queue
             scan_time = time.time()
             scan = np.array(scan).astype('float')
+            
+            # make sure to not thread swtich while processing data 
 
             if len(scan.shape) > 2:
                 scan = np.reshape(scan, (scan.shape[0] * scan.shape[1], scan.shape[2]))
@@ -429,6 +463,7 @@ class Lidar():
 
             if self.kill_thread:
                 self.lidar.stop()
+                self.lidar.disconnect()
                 return
 
     def startScan(self, start_time=None):
@@ -492,7 +527,7 @@ class Lidar():
 
             chamfer_loss = PointCloud.chamfer_distance(pc, ground_truth, only_a_to_b=True)
             regularization = np.sum((np.subtract(params[0:6], initial_guess[0:6]))**2)
-            loss = chamfer_loss + regularization
+            loss = chamfer_loss + regularization*10
             print(f" reconstruction: {chamfer_loss} reg: {regularization}")
             return loss
 
@@ -564,7 +599,7 @@ class Lidar():
         mask = mask & ((z > self.turntable_height) & (x > (self.dist_from_axis - self.TURNTABLE_RADIUS)) & (x < (self.dist_from_axis + self.TURNTABLE_RADIUS)))
         self.curr_scan = self.curr_scan[mask]
 
-        # g statistical outlier removal
+        # statistical outlier removal
         pc= self.get3DPointCloud(pos=(self.dist_from_axis, 0, 0), angular_pos=(0,0,0))
         pcd = o3d.geometry.PointCloud()
         pcd.points = o3d.utility.Vector3dVector(pc)
@@ -572,7 +607,7 @@ class Lidar():
         pcd.points = o3d.utility.Vector3dVector(self.curr_scan)
         pcd = pcd.select_by_index(ind)
         self.curr_scan = np.asarray(pcd.points)
-            
+
     def get_buffer(self):
         """Get buffer of the 2d lidar data that is updated in realtime
 
@@ -584,6 +619,10 @@ class Lidar():
         self.buffer = Queue()
         self.user_request_data = True
         return self.buffer
+
+    def disconnect(self):
+        self.lidar.stop()
+        self.lidar.disconnect()
 
     def get3DPointCloud(self, scan: np.ndarray=None, angular_speed=None, pos=None, angular_pos=None) -> np.ndarray:
         """Get an array of points (x,y,z) from the provided scan data or the current scan data.
@@ -614,7 +653,7 @@ class Lidar():
         if angular_pos == None:
             angular_pos = self.angular_pos
 
-        result = lidar2d_to_3d(scan, self.angular_speed, pos=self.pos, 
-                                        angular_pos=self.angular_pos)
+        result = lidar2d_to_3d(scan, self.angular_speed, pos=pos, 
+                                        angular_pos=angular_pos)
 
         return result

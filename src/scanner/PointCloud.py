@@ -502,7 +502,7 @@ def calculate_overlap_distance(subset, larger_set, threshold):
     valid_distances = distances[distances != np.inf]
 
     # Compute average distance if there are overlapping points
-    average_distance = np.mean(valid_distances) if len(valid_distances) > 0 else 0
+    average_distance = np.mean(valid_distances**2) if len(valid_distances) > 0 else 0
     return average_distance
 def hausdorff_distance(cloud1, cloud2):
     """
@@ -562,13 +562,13 @@ def chamfer_distance(point_cloud_a, point_cloud_b, only_a_to_b=False):
 
 
     # Compute the Chamfer Distance
-    chamfer_a_to_b = np.mean((distances_a_to_b)) ** 2
-    chamfer_b_to_a = np.mean((distances_b_to_a)) ** 2
-
     if only_a_to_b:
-        return chamfer_a_to_b
+        chamfer_a_to_b = np.mean(np.sqrt(distances_a_to_b))**2
+        chamfer_b_to_a = np.mean(np.sqrt(distances_b_to_a))**2
     else:
-        return chamfer_a_to_b + chamfer_b_to_a
+        chamfer_a_to_b = (np.sqrt(np.mean(((distances_a_to_b)**2))) + np.mean(np.sqrt(distances_a_to_b))**2) /2 
+        chamfer_b_to_a = (np.sqrt(np.mean(((distances_b_to_a)**2))) + np.mean(np.sqrt(distances_b_to_a))**2) / 2
+    return chamfer_a_to_b + chamfer_b_to_a
 
 def get_surface_points(input_cloud, voxel_size=0.1):
     pcd = o3d.geometry.PointCloud()
