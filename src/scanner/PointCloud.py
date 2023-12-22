@@ -25,6 +25,8 @@ def cylindrical2cart(r, theta, z):
     return (x, y, z)
 
 def from_file(path):
+    pc = np.loadtxt(path)
+    pc = pc.reshape(-1, 3)
     return np.loadtxt(path)
 
 def to_file(pc, *, folder=None, filename=None):
@@ -552,23 +554,35 @@ def earth_movers_distance(cloud1, cloud2):
 
 
 def chamfer_distance(point_cloud_a, point_cloud_b, only_a_to_b=False):
-    # Create KD-Trees
-    tree_a = cKDTree(point_cloud_a)
-    tree_b = cKDTree(point_cloud_b)
+    """
+    Calculate the Chamfer Distance between two point clouds.
 
-    # Find the closest points and distances from A to B
-    distances_a_to_b, _ = tree_a.query(point_cloud_b)
-    distances_b_to_a, _ = tree_b.query(point_cloud_a)
+    Parameters:
+    point_cloud_a (numpy.ndarray): First point cloud as an Nx3 numpy array.
+    point_cloud_b (numpy.ndarray): Second point cloud as an Nx3 numpy array.
+    only_a_to_b (bool): If True, only calculate the distance from point_cloud_a to point_cloud_b.
 
+    Returns:
+    float: The Chamfer Distance between the two point clouds.
+    """
+    # Build a KDTree for point_cloud_b
+    tree = cKDTree(point_cloud_b)
 
-    # Compute the Chamfer Distance
+    # Find the nearest neighbor in point_cloud_b for each point in point_cloud_a
+    distances_a_to_b, _ = tree.query(point_cloud_a)
+
     if only_a_to_b:
-        chamfer_a_to_b = np.mean(np.sqrt(distances_a_to_b))**2
-        chamfer_b_to_a = np.mean(np.sqrt(distances_b_to_a))**2
-    else:
-        chamfer_a_to_b = (np.sqrt(np.mean(((distances_a_to_b)**2))) + np.mean(np.sqrt(distances_a_to_b))**2) /2 
-        chamfer_b_to_a = (np.sqrt(np.mean(((distances_b_to_a)**2))) + np.mean(np.sqrt(distances_b_to_a))**2) / 2
-    return chamfer_a_to_b + chamfer_b_to_a
+        return np.mean(distances_a_to_b)
+
+    # Build a KDTree for point_cloud_a
+    tree = cKDTree(point_cloud_a)
+
+    # Find the nearest neighbor in point_cloud_a for each point in point_cloud_b
+    distances_b_to_a, _ = tree.query(point_cloud_b)
+
+    # Combine the distances from a to b and b to a
+    chamfer_distance = np.mean(distances_a_to_b) + np.mean(distances_b_to_a)
+    return chamfer_distance
 
 def get_surface_points(input_cloud, voxel_size=0.1):
     pcd = o3d.geometry.PointCloud()

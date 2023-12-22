@@ -1,6 +1,6 @@
 import PointCloud
 from Lidar import Lidar, estimate_angular_speed, lidar2d_to_3d, calibrate_lidars, start_stop_scan, calibrate, calibrate_no_ref, auto_get_lidars
-from Visualization import plot3d, showMesh, plot2d_realtime, plot_dual_3d_clouds
+from Visualization import plot3d, showMesh, plot_dual_3d_clouds
 import ArgSource
 import time
 import argparse

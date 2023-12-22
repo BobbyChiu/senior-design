@@ -1,6 +1,6 @@
 import PointCloud
 from Lidar import Lidar, start_stop_scan, calibrate, auto_get_lidars
-from Visualization import plot3d, showMesh, plot2d_realtime, plot_dual_3d_clouds, RealTimePlotWindow
+from Visualization import plot3d, showMesh, plot_dual_3d_clouds, RealTimePlotWindow
 import ArgSource
 import time
 import argparse
@@ -16,57 +16,81 @@ LIDAR_VERTICAL_SEPARATION = 15.722
 kill_test_thread = False
 
 def calibrate_from_file(lidar_top: Lidar, lidar_bottom: Lidar):
-    #read in calibration data
-    top_background = PointCloud.from_file("calibration/top_background.xyz")
-    bottom_background = PointCloud.from_file("calibration/bottom_background.xyz")
+    try:
+        #read in calibration data
+        top_background = PointCloud.from_file("calibration/top_background.xyz")
+        bottom_background = PointCloud.from_file("calibration/bottom_background.xyz")
 
-    # set backgrounds
-    lidar_top.curr_scan = top_background
-    lidar_bottom.curr_scan = bottom_background
+        # set backgrounds
+        lidar_top.curr_scan = top_background
+        lidar_bottom.curr_scan = bottom_background
 
-    # set background params
-    dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
-    lidar_top.set_current_to_background(estimate_params=False)
-    lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
+        # set background params
+        dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
+        lidar_top.set_current_to_background(estimate_params=False)
+        lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
 
-    # set calibration data
-    optimal_params =  PointCloud.from_file("calibration/calibration.data")
-    lidar_top.set_params(np.append(optimal_params[0:3], optimal_params[6:9]))
-    lidar_bottom.set_params(np.append(optimal_params[3:6], optimal_params[9:12]))
-    print("Using previous calibration data")
+        # set calibration data
+        optimal_params =  PointCloud.from_file("calibration/calibration.data")
+        lidar_top.set_params(np.append(optimal_params[0:3], optimal_params[6:9]))
+        lidar_bottom.set_params(np.append(optimal_params[3:6], optimal_params[9:12]))
+        lidar_top.angular_speed = optimal_params[12]
+        lidar_bottom.angular_speed = optimal_params[13]
+        print("Using previous calibration data")
+    except Exception:
+        print("No calibration data found, please calibrate first")
 
 def do_test_mode(lidar_top: Lidar, lidar_bottom: Lidar, mainWin : RealTimePlotWindow):
+    # init
     calibrate_from_file(lidar_top, lidar_bottom)
     begin_time = time.time()
-    lidar_bottom.curr_scan = np.empty((0, 3))
-    lidar_top.curr_scan = np.empty((0, 3))
+    pc_top = np.empty((0, 3))
+    pc_bottom = np.empty((0, 3))   
     lidar_top.startScan(begin_time)
     lidar_bottom.startScan(begin_time)
     while not kill_test_thread:
+        # scanning for 15 secs
         cycle_time = time.time()
         while time.time() - cycle_time < 15:
             if kill_test_thread:
+                lidar_top.stopScan()
+                lidar_bottom.stopScan()
                 return
             time.sleep(0.001)
+        # pause scanning, start processing
         lidar_top.stopScan()
         lidar_bottom.stopScan()
 
-        pc_combined = np.vstack((mainWin.pc1_top, mainWin.pc1_bottom))
+        # remove background
+        lidar_top.remove_background_on_current()
+        lidar_bottom.remove_background_on_current()
+        
+        # convert to 3d
+        pc_bottom = lidar_bottom.get3DPointCloud()
+        pc_top = lidar_top.get3DPointCloud()
+        mainWin.set_plot_3d(data_bottom=pc_bottom, data_top=pc_top, plot_num=1)
+        pc_combined = np.vstack((pc_top, pc_bottom))
+        
+        # post processing
         proc_params = {'remove_statistical_outlier' : {
                             'nb_neighbors' : 20,
                             'std_ratio' : 2,
-                        }
+                        },
+                       'add_bottom' : True
                         }
         pc_final = do_processing_on_point_cloud(pc_combined, **proc_params)
         mainWin.set_plot_3d(pc_final, plot_num=2)
-        mesh = PointCloud.to_mesh(pc_final)
-        mainWin.update_mesh_image(mesh)
+        
+        # get mesh
+        mesh = PointCloud.to_mesh(pc_final, voxel_size=0.1)
+        mainWin.update_mesh(mesh)
 
+        # resume scanning if time is not up
         if time.time() - begin_time > 60:
             mainWin.clear_plot_3d(1)
             begin_time = time.time()
-            lidar_top.startScan()
-            lidar_bottom.startScan()
+            lidar_top.startScan(begin_time)
+            lidar_bottom.startScan(begin_time)
         else:
             lidar_top.resumeScan()
             lidar_bottom.resumeScan()
@@ -82,8 +106,14 @@ def do_get_background(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     lidar_top.set_current_to_background(estimate_params=False)
     lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
 
+    # save backgrounds
+    PointCloud.to_file(lidar_top.background_data, folder="calibration", filename="top_background.xyz")
+    PointCloud.to_file(lidar_bottom.background_data, folder="calibration", filename="bottom_background.xyz")
+
 
 def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
+    mainWin.clear_plot_3d(1)
+
     lidars = [lidar_top, lidar_bottom]
 
     # get calibration scans
@@ -96,15 +126,9 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
 
     # remove background
     for l in lidars:
-        l.remove_background_on_current(use_calib_params=False)
-
-    # save backgrounds
-    PointCloud.to_file(lidar_top.background_data, folder="calibration", filename="top_background.xyz")
-    PointCloud.to_file(lidar_bottom.background_data, folder="calibration", filename="bottom_background.xyz")
+        l.remove_background_on_current()
 
     # calibrate
-    # calibration_duck = PointCloud.stl_to_mesh('calibration/ultimate_sandia.stl')
-    # calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 5000)
     calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
     calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 5000) / 10
     initial_guess = [lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION, # lidar top pos
@@ -114,7 +138,7 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     
     optimal_params, top_calibration_cloud, bottom_calibration_cloud = calibrate(lidar_top, lidar_bottom, initial_guess, calibration_duck) # make sure scans align
     print(f"Optimal Scanning Params: {optimal_params}")
-    plot_dual_3d_clouds(top_calibration_cloud, bottom_calibration_cloud, 'red', 'blue')
+    plot_dual_3d_clouds(bottom_calibration_cloud, top_calibration_cloud, 'blue', 'red')
 
     PointCloud.to_file(top_calibration_cloud, folder="calibration", filename="top_cal.xyz")
     PointCloud.to_file(bottom_calibration_cloud, folder="calibration", filename="bottom_cal.xyz")
@@ -124,9 +148,7 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
 
 
 def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
-
-    if lidar_top.pos[0] == 0 or lidar_bottom.pos[0] == 0:
-        calibrate_from_file(lidar_top, lidar_bottom)
+    mainWin.clear_plot_3d(1)
 
     scan_duration = kwargs['scan_duration']
     print(f"Scanning for {scan_duration} seconds")
@@ -137,8 +159,8 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
     PointCloud.to_file(lidar_top.curr_scan, folder="lidar-data-2d", filename="scan_top.xyz")
 
     # if kwargs['remove_background']:
-    lidar_bottom.remove_background_on_current(use_calib_params=True)
-    lidar_top.remove_background_on_current(use_calib_params=True)
+    lidar_bottom.remove_background_on_current()
+    lidar_top.remove_background_on_current()
 
     # save scans after background removal
     PointCloud.to_file(lidar_bottom.curr_scan, folder="lidar-data-2d", filename="scan_bottom.xyz")
@@ -156,7 +178,6 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
 
 
 def do_processing_on_point_cloud(pc, **kwargs):
-
     pc = PointCloud.get_surface_points(pc, voxel_size=0.1)
 
     # open3d statistical outlier remover
@@ -219,7 +240,7 @@ def do_processing_on_point_cloud(pc, **kwargs):
                                         crop=True)
         pc[:, 2] = - pc[:, 2]
         
-    plot3d(pc)
+    plot3d(pc, plot_num=2)
     return pc
 
 
@@ -401,6 +422,7 @@ if __name__ == '__main__':
     
     lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-30, 0),
                                               (10, 50), (-15, 45))
+    calibrate_from_file(lidar_top, lidar_bottom)
     mainWin = None
     with argsource:
         def process_commands():
@@ -453,7 +475,7 @@ if __name__ == '__main__':
                             pc_processed = do_processing_on_point_cloud(pc=pc_raw, **arg_dict)
                             output_string = 'Process finished.'
                         elif arg_dict['do'] == 'generate':
-                            if not pc_processed:
+                            if pc_processed is None:
                                 raise RuntimeError('No processed point cloud. Perform a process first.')
                             mesh = do_generate_mesh(pc=pc_processed, **arg_dict)
                             do_generate_files(pc=pc_processed,
@@ -467,6 +489,8 @@ if __name__ == '__main__':
                             output_string = 'Changed test mode to enabled.'
                             test_thread = threading.Thread(target=do_test_mode, 
                                                                 args=(lidar_top, lidar_bottom, mainWin))
+                            
+                            print("here")
                             kill_test_thread = False
                             test_thread.start()
                         else:
@@ -485,7 +509,7 @@ if __name__ == '__main__':
             t.start()
             
             app = QApplication(sys.argv)
-            mainWin = RealTimePlotWindow(top_buffer, bottom_buffer, [(255, 216, 173), (173, 216, 230)])
+            mainWin = RealTimePlotWindow(top_buffer, bottom_buffer, [(255, 0, 0), (0, 255, 0)])
             mainWin.show()
             sys.exit(app.exec_())
         finally:

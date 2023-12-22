@@ -108,7 +108,7 @@ def _process_express_scan(data, new_angle, trame):
 class RPLidar(object):
     '''Class for communicating with RPLidar rangefinder scanners'''
 
-    def __init__(self, port, baudrate=115200, timeout=1, logger=None):
+    def __init__(self, port, baudrate=115000, timeout=1, logger=None):
         '''Initilize RPLidar object for communicating with the sensor.
 
         Parameters

@@ -8,5 +8,6 @@ PyQt5
 pyqtgraph
 pyserial
 PyQtWebEngine
-PyOpenGL 
+PyOpenGL  
 PyOpenGL_accelerate
+vtk
