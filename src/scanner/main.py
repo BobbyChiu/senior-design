@@ -179,6 +179,7 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
     pc_top = lidar_top.get3DPointCloud()
 
     pc_final = np.vstack((pc_bottom, pc_top))
+
     # save pc_final before processing
     PointCloud.to_file(pc_final, folder="lidar-data-xyz")
 
@@ -374,6 +375,10 @@ if __name__ == '__main__':
                     'sigma_s': float(bilateral_args[1]),
                     'sigma_n': float(bilateral_args[2]),
                 }
+
+        elif args_dict['do'] == 'test':
+            if not args_dict['toggle_test']:
+                raise KeyError('"--toggle-test" flag is required')
 
         elif args_dict['do'] == 'test':
             if not args_dict['toggle_test']:

@@ -194,7 +194,7 @@ def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
     unique_times = np.unique(time)
 
     # Number of bins for histogram
-    num_bins = 10
+    num_bins = 20
 
     # Initialize an array to hold the histogram data
     histogram_features = np.zeros((len(unique_times), num_bins * 2))

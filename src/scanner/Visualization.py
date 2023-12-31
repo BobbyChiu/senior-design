@@ -73,6 +73,33 @@ def plot_dual_3d_clouds(points_3d_1, points_3d_2, color_1='red', color_2='green'
         # Render the plot
         plotly.offline.iplot(plot_figure)
 
+def plot_dual_3d_clouds(points_3d_1, points_3d_2, color_1, color_2):
+    # First point cloud
+    x1 = points_3d_1[:,0]
+    y1 = points_3d_1[:,1]
+    z1 = points_3d_1[:,2]
+    trace1 = go.Scatter3d(x=x1, y=y1, z=z1,
+                          mode='markers',
+                          marker={'size': 1, 'color': color_1, 'opacity': 0.8})
+
+    # Second point cloud
+    x2 = points_3d_2[:,0]
+    y2 = points_3d_2[:,1]
+    z2 = points_3d_2[:,2]
+    trace2 = go.Scatter3d(x=x2, y=y2, z=z2,
+                          mode='markers',
+                          marker={'size': 1, 'color': color_2, 'opacity': 0.8})
+
+    # Configure the layout.
+    layout = go.Layout(margin={'l': 0, 'r': 0, 'b': 0, 't': 0})
+    data = [trace1, trace2]
+    plot_figure = go.Figure(data=data, layout=layout)
+    plot_figure.update_scenes(aspectmode='data')
+    
+    # Render the plot
+    plotly.offline.iplot(plot_figure)
+
+
 # plot 3d points
 def plot3d(points_3d, plot_num=1):
     global plotter
