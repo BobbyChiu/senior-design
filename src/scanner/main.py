@@ -10,34 +10,37 @@ import open3d as o3d
 from traceback import print_exc
 import threading
 from PyQt5.QtWidgets import QApplication
+from PyQt5.QtWidgets import QInputDialog
 import sys
 
 LIDAR_VERTICAL_SEPARATION = 15.722
 kill_test_thread = False
 
 def calibrate_from_file(lidar_top: Lidar, lidar_bottom: Lidar):
+    # read in background data
     try:
-        #read in calibration data
         top_background = PointCloud.from_file("calibration/top_background.xyz")
-        bottom_background = PointCloud.from_file("calibration/bottom_background.xyz")
-
-        # set backgrounds
         lidar_top.curr_scan = top_background
+        lidar_top.set_current_to_background()
+    except FileNotFoundError:
+        print("Top background file not found")
+    
+    try:
+        bottom_background = PointCloud.from_file("calibration/bottom_background.xyz")
         lidar_bottom.curr_scan = bottom_background
+        lidar_bottom.set_current_to_background()
+    except FileNotFoundError:
+        print("Bottom background file not found")
 
-        # set background params
-        dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
-        lidar_top.set_current_to_background(estimate_params=False)
-        lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
-
-        # set calibration data
-        optimal_params =  PointCloud.from_file("calibration/calibration.data")
+    # read calibration data
+    try:
+        optimal_params = np.loadtxt("calibration/calibration.data")
         lidar_top.set_params(np.append(optimal_params[0:3], optimal_params[6:9]))
         lidar_bottom.set_params(np.append(optimal_params[3:6], optimal_params[9:12]))
         lidar_top.angular_speed = optimal_params[12]
         lidar_bottom.angular_speed = optimal_params[13]
         print("Using previous calibration data")
-    except Exception:
+    except FileNotFoundError:
         print("No calibration data found, please calibrate first")
 
 def do_test_mode(lidar_top: Lidar, lidar_bottom: Lidar, mainWin : RealTimePlotWindow):
@@ -97,14 +100,14 @@ def do_test_mode(lidar_top: Lidar, lidar_bottom: Lidar, mainWin : RealTimePlotWi
 
 
 def do_get_background(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
+    mainWin.clear_plot_3d(1)
     lidars = [lidar_top, lidar_bottom]
     background_collection_time = kwargs['background_duration']
     # get background
     print(f"START BACKGROUND COLLECTION, DURATION: {background_collection_time} s")
     start_stop_scan(lidars, background_collection_time)
-    dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
-    lidar_top.set_current_to_background(estimate_params=False)
-    lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
+    lidar_bottom.set_current_to_background()
+    lidar_top.set_current_to_background()
 
     # save backgrounds
     PointCloud.to_file(lidar_top.background_data, folder="calibration", filename="top_background.xyz")
@@ -126,13 +129,13 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
 
     # remove background
     for l in lidars:
-        l.remove_background_on_current()
+        l.remove_background_on_current(use_calib_params=False)
 
     # calibrate
     calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
     calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 5000) / 10
-    initial_guess = [lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION, # lidar top pos
-                    lidar_bottom.dist_from_axis, 0, 0,
+    initial_guess = [0, 0, LIDAR_VERTICAL_SEPARATION, # lidar top pos
+                    0, 0, 0,
                     0, 0, 0,  # lidar top angle
                     0, 0, 0]  # lidar bottom angle
     
@@ -144,13 +147,19 @@ def do_calibration(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs) -> None:
     PointCloud.to_file(bottom_calibration_cloud, folder="calibration", filename="bottom_cal.xyz")
 
     # save calibration data
-    PointCloud.to_file(optimal_params, folder="calibration", filename="calibration.data")
+    np.savetxt("calibration/calibration.data", optimal_params, fmt="%f")
 
 
 def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
     mainWin.clear_plot_3d(1)
 
     scan_duration = kwargs['scan_duration']
+
+    if scan_duration == 99:
+        # popup window to ask for scan duration
+        scan_duration = mainWin.get_input()
+        
+
     print(f"Scanning for {scan_duration} seconds")
     start_stop_scan([lidar_top, lidar_bottom], scan_duration)
 
@@ -178,7 +187,6 @@ def do_scan(lidar_bottom: Lidar, lidar_top: Lidar, **kwargs):
 
 
 def do_processing_on_point_cloud(pc, **kwargs):
-    pc = PointCloud.get_surface_points(pc, voxel_size=0.1)
 
     # open3d statistical outlier remover
     stat_args = kwargs.get('remove_statistical_outlier')
@@ -246,7 +254,7 @@ def do_processing_on_point_cloud(pc, **kwargs):
 
 def do_generate_mesh(pc, **kwargs):
     # generate mesh
-    mesh = PointCloud.to_mesh(pc)
+    mesh = PointCloud.to_mesh(pc, 0.1)
     showMesh(mesh) # show mesh
 
     return mesh
@@ -255,7 +263,7 @@ def do_generate_mesh(pc, **kwargs):
 def do_generate_files(pc=None, lidar_bottom=None, lidar_top=None, mesh=None, **kwargs) -> None:
     # TODO: Do something with kwargs['scaling']
 
-    if pc is not None:
+    if pc is not None and kwargs.get('save_as_xyz') is not None:
         PointCloud.to_file(pc, filename=kwargs.get('save_as_xyz'))
 
     if lidar_bottom is not None:
@@ -264,7 +272,7 @@ def do_generate_files(pc=None, lidar_bottom=None, lidar_top=None, mesh=None, **k
     if lidar_top is not None:
         PointCloud.to_file(lidar_top.curr_scan, folder="lidar-data-2d", filename="latest_top.xyz")
 
-    if mesh is not None:
+    if mesh is not None and kwargs.get('save_as_stl') is not None:
         # save as stl file
         PointCloud.mesh_to_stl(mesh, filename=kwargs.get('save_as_stl'))
 
@@ -350,22 +358,11 @@ if __name__ == '__main__':
                     'std_ratio': float(rrad_args[1]),
                 }
 
-            # # K-nn thresholding
-            # knn_args = args_dict['k_nn_thresholding']
-            # if knn_args:
-            #     if len(knn_args) % 2 != 0:
-            #         raise ValueError(f'Number of K-nn arguments must be even but is {len(knn_args)}')
-            #     knn_list = [{
-            #         'k': int(knn_args[i]),
-            #         'threshold': float(knn_args[i + 1]),
-            #     } for i in range(0, len(knn_args), 2)]
-            #     args_dict['k_nn_thresholding'] = knn_list
-
             # Gaussian filter
             gaussian_args = args_dict['gaussian']
             if gaussian_args:
                 args_dict['gaussian'] = {
-                    'k': int(gaussian_args[0]),
+                    'k': float(gaussian_args[0]),
                     'sigma': float(gaussian_args[1]),
                 }
 
@@ -373,14 +370,10 @@ if __name__ == '__main__':
             bilateral_args = args_dict['bilateral']
             if bilateral_args:
                 args_dict['bilateral'] = {
-                    'k': int(bilateral_args[0]),
+                    'k': float(bilateral_args[0]),
                     'sigma_s': float(bilateral_args[1]),
                     'sigma_n': float(bilateral_args[2]),
                 }
-
-        elif args_dict['do'] == 'generate':
-            if not args_dict['save_as_stl'] and not args_dict['save_as_xyz']:
-                raise KeyError('Save file is required')
 
         elif args_dict['do'] == 'test':
             if not args_dict['toggle_test']:
@@ -468,6 +461,7 @@ if __name__ == '__main__':
                             output_string = 'Scan finished.'
                         elif arg_dict['do'] == 'open':
                             pc_raw = PointCloud.from_file(arg_dict['open_xyz'])
+                            plot3d(pc_raw)
                             output_string = 'Open finished.'
                         elif arg_dict['do'] == 'process':
                             if pc_raw is None:

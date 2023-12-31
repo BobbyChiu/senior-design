@@ -1,18 +1,18 @@
 import numpy as np
 from queue import Queue
-from rplidar_new import RPLidar, MAX_MOTOR_PWM
+from rplidar_new import RPLidar
 import time
 import threading
 import Visualization
 import PointCloud
 from matplotlib import pyplot as plt
 from scipy.optimize import minimize
-from scipy.interpolate import interp1d
-from serial.serialutil import SerialTimeoutException
 from sklearn.decomposition import PCA
-import open3d as o3d
 import serial.tools.list_ports
-import sys
+pc_combined = None
+pc_top = None
+pc_bottom = None
+iter = 0
 
 def start_stop_scan(lidars, scan_time):
     start_time = time.time()
@@ -22,20 +22,78 @@ def start_stop_scan(lidars, scan_time):
     for l in lidars:
         l.stopScan()
 
-def calibrate(lidar_top, lidar_bottom, initial_guess, ref_obj):
-    optimized_params, pc_top_cal, pc_bottom_cal = calibrate_lidars(
-                                        lidar_top, 
-                                        lidar_bottom, 
-                                        initial_guess=initial_guess,
-                                        ref=ref_obj)
+# estimate the positions and orientations of the lidars
+def calibrate(lidar_top, lidar_bottom, initial_guess, ref):
+    print(lidar_top.curr_scan.shape)
+    angular_speed_top = estimate_angular_speed(lidar_top.curr_scan)
+    angular_speed_bottom = estimate_angular_speed(lidar_bottom.curr_scan)
+    angular_speed = (angular_speed_top + angular_speed_bottom)/2
+
+    initial_guess = np.append(initial_guess, [0, 0, 0, 0, 0, 0])
+
+    # remove outliers from lidar scans
+    top = lidar2d_to_3d(lidar_top.curr_scan, angular_speed=angular_speed)
+    bottom = lidar2d_to_3d(lidar_bottom.curr_scan, angular_speed=angular_speed)
+    top, ind = PointCloud.remove_statistical_outliers(top, 20, 2)
+    lidar_top.curr_scan = lidar_top.curr_scan[ind]
+    bottom, ind = PointCloud.remove_statistical_outliers(bottom, 20, 2)
+    lidar_bottom.curr_scan = lidar_bottom.curr_scan[ind]
+
+    print(lidar_top.curr_scan.shape)
+
+    # preprocess reference object
+    ref_height = ref[:, 2].max() - ref[:, 2].min()
+    ref_min = ref[:,2].min()
+    ref_no_bottom = ref[ref[:, 2] > (ref_min + ref_height * 0.1)]
+
+    # minimize over all parameters
+    def loss_all_params(params):
+        global pc_combined
+        global pc_bottom
+        global pc_top
+        global iter
+
+        pos_top = params[0:3]
+        pos_bottom = params[3:6]
+        angle_top = params[6:9]
+        angle_bottom = params[9:12]
+        transformation = params[12:18]
+
+        # current scan estimate
+        pc_top = lidar2d_to_3d(lidar_top.curr_scan, angular_speed, pos=pos_top, angular_pos=angle_top)
+        pc_bottom = lidar2d_to_3d(lidar_bottom.curr_scan, angular_speed, pos=pos_bottom, angular_pos=angle_bottom)
+        pc_ref = np.vstack((pc_top, pc_bottom))
+
+        # find error due to difference between reference scans and reference object 
+        pc_ref = PointCloud.apply_transformation(transformation, pc_ref)
+
+        reconstrction_loss = PointCloud.chamfer_distance(pc_ref, ref_no_bottom)
+
+        regularization = (np.sum((np.subtract(params[1:3], initial_guess[1:3])**2)) + 
+                          np.sum((np.subtract(params[4:12], initial_guess[4:12])**2)))
+
+        # Visualize every 20 iterations
+        if iter % 20 == 0:
+            Visualization.plot_dual_3d_clouds(pc_ref, ref_no_bottom)
+            print(f"reconstruction loss: {reconstrction_loss}, reg: {regularization}")
+            iter = 0
+        iter += 1
+
+        loss = reconstrction_loss + regularization / 32
+        return loss
+    
+    optimized_params = minimize(loss_all_params, initial_guess, method='Powell').x
+    print("Calibration parameters:", optimized_params)
+    optimized_params = np.append(optimized_params[:12], (angular_speed_top, angular_speed_bottom))
     
     # apply optimal params
     lidar_top.set_params(np.append(optimized_params[0:3], optimized_params[6:9]))
     lidar_bottom.set_params(np.append(optimized_params[3:6], optimized_params[9:12]))
     lidar_top.angular_speed = optimized_params[12]
     lidar_bottom.angular_speed = optimized_params[13]
-    return optimized_params, pc_top_cal, pc_bottom_cal
+    return optimized_params, pc_top, pc_bottom
 
+# automatically find the ports of the lidars and set their limits
 def auto_get_lidars(top_dist_lim, top_ang_lim, bot_dist_lim, bot_ang_lim):
     ports = serial.tools.list_ports.comports()
 
@@ -116,8 +174,12 @@ def lidar2d_to_3d(scan, angular_speed=30, pos=(0,0,0), angular_pos=(0,0,0)):
 
 # perform dft to estimate angular speed of turntable
 def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
+    # Remove outliers
+    pc = lidar2d_to_3d(scan)
+    pc, ind = PointCloud.remove_statistical_outliers(pc, 20, 2)
+    scan = scan[ind]
 
-    if scan.size < 4:
+    if scan.size == 0:
         return 0
 
     dist = scan[:, 0]
@@ -222,89 +284,6 @@ def estimate_angular_speed(scan, freq_range=(25, 45), show_plot=False):
     print(f"Estimated angular speed: {domanant_freq} deg/sec")
     return domanant_freq
 
-pc_combined = None
-pc_top = None
-pc_bottom = None
-iter = 0
-def calibrate_lidars(lidar_top, lidar_bottom, initial_guess, ref):
-    angular_speed_top = estimate_angular_speed(lidar_top.curr_scan)
-    angular_speed_bottom = estimate_angular_speed(lidar_bottom.curr_scan)
-    initial_guess = np.append(initial_guess, [0, 0, 0, 0, 0, 0])
-
-    ref_height = ref[:, 2].max() - ref[:, 2].min()
-    ref_min = ref[:,2].min()
-    ref_no_bottom = ref[ref[:, 2] > (ref_min + ref_height * 0.1)]
-    def loss_function(params):
-        global pc_combined
-        global pc_bottom
-        global pc_top
-        global iter
-
-        pos_top = params[0:3]
-        pos_bottom = params[3:6]
-        angle_top = params[6:9]
-        angle_bottom = params[9:12]
-        transformation = params[12:18]
-
-        # current scan estimate
-        pc_top = lidar2d_to_3d(lidar_top.curr_scan, angular_speed_top, pos=pos_top, angular_pos=angle_top)
-        pc_bottom = lidar2d_to_3d(lidar_bottom.curr_scan, angular_speed_bottom, pos=pos_bottom, angular_pos=angle_bottom)
-        pc_ref = np.vstack((pc_top, pc_bottom))
-
-        # find error due to difference between reference scans and reference object 
-        pc_ref = PointCloud.apply_transformation(transformation, pc_ref)
-
-        reconstrction_loss = PointCloud.chamfer_distance(pc_ref, ref_no_bottom, only_a_to_b=False)
-
-        regularization = np.sum((np.subtract(params[0:12], initial_guess[0:12])**2))
-
-        # Visualize every 20 iterations
-        if iter % 20 == 0:
-            Visualization.plot_dual_3d_clouds(pc_ref, ref_no_bottom)
-            print(f"reconstruction loss: {reconstrction_loss}, reg: {regularization}")
-            iter = 0
-        iter += 1
-
-        loss = reconstrction_loss + regularization/32
-        return loss
-    
-
-    optimized_params = minimize(loss_function, initial_guess, method='Powell').x
-    optimized_params = np.array(optimized_params) 
-    print("Calibration parameters:", optimized_params)
-    return np.append(optimized_params, (angular_speed_top, angular_speed_bottom)), pc_top, pc_bottom
-
-# calibrate without reference, returns scanning parameters that result in point clouds that are aligned
-def calibrate_no_ref(top_scan, bottom_scan, initial_guess):
-    initial_guess = np.array(initial_guess)
-
-    def loss_function(params):
-        global pc_bottom
-        global pc_top
-        pos_top = params[0:3]
-        angle_top = params[3:6]
-        pos_bottom = params[6:9]
-        angle_bottom = params[9:12]
-
-        # current scan estimate
-        pc_top = lidar2d_to_3d(top_scan, params[12], pos=pos_top, angular_pos=angle_top)
-        pc_bottom = lidar2d_to_3d(bottom_scan, params[13], pos=pos_bottom, angular_pos=angle_bottom)
-
-        # find error due to disalignment between the two current top and bottom scans
-        disalignment_loss = PointCloud.chamfer_distance(pc_top, pc_bottom)
-
-        mask = np.ones(params.size, dtype=bool)
-        regularization = np.sum((np.subtract(params[mask], initial_guess[mask]))**2)
-        loss = disalignment_loss + regularization / 4
-
-        print(f"reg loss: {regularization}, d loss: {disalignment_loss}")
-        print(loss)
-        return loss
-    
-    optimized_params = minimize(loss_function, initial_guess, method='SLSQP').x
-    print("Calibration parameters:", optimized_params)
-    return optimized_params, pc_top, pc_bottom
-
 class Lidar():
 
     def __init__(self, port: str, dist_lim: tuple[float, float]=(0,60), angle_lim: tuple[float, float]=(30,150), pos=(0,0,0), angular_pos=(0,0,0)):
@@ -336,19 +315,11 @@ class Lidar():
         self.min_ang = angle_lim[0]
         self.max_ang = angle_lim[1]
         self.angular_speed = 33
-        self.dist_from_axis = 0
-        self.turntable_height = 0
         self.start_scan_time = None
         self.background_data = np.array([])
         self.pos = pos
         self.angular_pos = angular_pos
         self.lidar = RPLidar(port)
-
-        # connect to lidar
-        info = self.lidar.get_info()
-        print(info)
-        health = self.lidar.get_health()
-        print(health)
         
         self.kill_thread = False
 
@@ -360,8 +331,6 @@ class Lidar():
 
         # start scan
         self.lidar.connect()
-        info = self.lidar.get_info()
-        health = self.lidar.get_health()
         self.scan_generator = self.lidar.iter_scans(scan_type='express', max_buf_meas=3000)
 
         for scan in self.scan_generator:
@@ -432,55 +401,6 @@ class Lidar():
         self.scan_thread = threading.Thread(target=self._scan_thread, daemon=True)
         self.scan_thread.start()
 
-    # estimates and sets the angular bias assuming the current scan is a vertical line
-    # returns the horizontal distance to the vertical line after rotating it
-    def calibrate_on_current(self, ground_truth, initial_guess):
-        angular_speed = estimate_angular_speed(self.curr_scan)
-
-        initial_guess = np.append(initial_guess, [0, 0, 0, 0, 0 ,0])
-
-        pc_init = lidar2d_to_3d(self.curr_scan, angular_speed, pos=initial_guess[0:3], angular_pos=initial_guess[3:6])
-
-        pcd = o3d.geometry.PointCloud()
-        pcd.points = o3d.utility.Vector3dVector(pc_init)
-
-        # # # g statistical outlier removal
-        # cl, ind = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2)
-        # pcd.points = o3d.utility.Vector3dVector(self.curr_scan)
-        # pcd = pcd.select_by_index(ind)
-        # self.curr_scan = np.asarray(pcd.points)
-
-        # ground_truth = ground_truth - ground_truth.mean()
-
-        def loss_function(params):
-            pos = params[:3]
-            angular_pos = params[3:6]
-            tranformation = params[6:12]
-
-            pc = lidar2d_to_3d(self.curr_scan, angular_speed, pos=pos, angular_pos=angular_pos)
-
-            # make sure point clouds are aligned
-            # pc = PointCloud.icp(pc, ground_truth)
-            pc = PointCloud.apply_transformation(tranformation, pc)
-
-            # Visualization.plot3d(pc)
-            # Visualization.plot3d(pc)
-            # time.sleep(10)
-
-            chamfer_loss = PointCloud.chamfer_distance(pc, ground_truth, only_a_to_b=True)
-            regularization = np.sum((np.subtract(params[0:6], initial_guess[0:6]))**2)
-            loss = chamfer_loss + regularization*10
-            print(f" reconstruction: {chamfer_loss} reg: {regularization}")
-            return loss
-
-        optimized_params = minimize(loss_function, initial_guess, method='SLSQP').x
-        print("Calibration parameters:", optimized_params)
-        
-        # set parameters
-        self.pos = optimized_params[:3]
-        self.angular_pos = optimized_params[3:]
-        return optimized_params
-
     def set_params(self, params):
         self.pos = params[:3]
         self.angular_pos = params[3:]
@@ -496,35 +416,13 @@ class Lidar():
         self.min_ang = angle_lim[0]
         self.max_ang = angle_lim[1]
 
-    def set_current_to_background(self, estimate_params=True):
-        """Perform the calibration sequence using data from startScan-stopScan.
+    def set_current_to_background(self):
+        """Set background using data from startScan-stopScan.
         """
-        if self.curr_scan.size < 4:
-            return
-
-        turntable = self.curr_scan[(self.curr_scan[:, 1] > -10) & (self.curr_scan[:, 1] < 0)]
-        dist = turntable[:, 0]
-        angle = turntable[:, 1]
-        x, z =  PointCloud.pol2cart(dist, angle)
-
-        # get background points to filter out later
+        # set background points to filter out later
         self.background_data = self.curr_scan
 
-        if estimate_params:
-            # estimate distance from axis of rotation
-            mask = PointCloud.knn_filter(np.column_stack((x, np.full(x.shape, 0))), 5, 0.1) # get points that form veritcal line
-            turntable_height = z[mask[:, 0]].max() + 0.6
-            dist_from_axis = np.median(x[mask[:, 0]]) + self.TURNTABLE_RADIUS
-            self.set_background_params(dist_from_axis, turntable_height)
-            print(f"Estimated dist from axis: {self.dist_from_axis}")
-            print(f"Turntable Height: {self.turntable_height}")
-            return self.dist_from_axis, self.turntable_height
-    
-    def set_background_params(self, dist_from_axis, turntable_height):
-        self.dist_from_axis = dist_from_axis
-        self.turntable_height = turntable_height
-
-    def remove_background_on_current(self, std_ratio=2):
+    def remove_background_on_current(self, use_calib_params=True):
         """Remove background points in-place from data from startScan-stopScan.
         """
         dist = self.curr_scan[:, 0]
@@ -532,24 +430,16 @@ class Lidar():
         x, z = PointCloud.pol2cart(dist, angle)
         mask = np.ones(x.size).astype('bool')
         
-        if self.background_data.size >= 4:
+        if self.background_data.size > 0:
             background_points = np.column_stack(PointCloud.pol2cart(self.background_data[:, 0], self.background_data[:, 1]))
 
             # remove background points
             mask = PointCloud.subtract_point_clouds(np.column_stack((x, z)), background_points, 1)
 
-        mask = mask & ((z > self.turntable_height) & (x > (self.dist_from_axis - self.TURNTABLE_RADIUS)) & (x < (self.dist_from_axis + self.TURNTABLE_RADIUS)))
+        if use_calib_params:
+            # remove points that are outside of the turntable
+            mask = mask & ((x > (self.pos[0] - self.TURNTABLE_RADIUS)) & (x < (self.pos[0] + self.TURNTABLE_RADIUS)))
         self.curr_scan = self.curr_scan[mask]
-
-        # #  outlier removal
-        if self.curr_scan.size > 3:
-            pc= self.get3DPointCloud(pos=(self.dist_from_axis, 0, 0), angular_pos=(0,0,0), angular_speed=self.angular_speed)
-            pcd = o3d.geometry.PointCloud()
-            pcd.points = o3d.utility.Vector3dVector(pc)
-            cl, ind = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=std_ratio)
-            pcd.points = o3d.utility.Vector3dVector(self.curr_scan)
-            pcd = pcd.select_by_index(ind)
-            self.curr_scan = np.asarray(pcd.points)
 
     def get_buffer(self):
         """Get buffer of the 2d lidar data that is updated in realtime
@@ -562,10 +452,6 @@ class Lidar():
         self.buffer = {'2d' : Queue(), '3d': Queue(), '3d_1' : Queue()}
         self.user_request_data = True
         return self.buffer
-
-    def disconnect(self):
-        self.lidar.stop()
-        self.lidar.disconnect()
 
     def get3DPointCloud(self, scan: np.ndarray=None, angular_speed=None, pos=None, angular_pos=None) -> np.ndarray:
         """Get an array of points (x,y,z) from the provided scan data or the current scan data.
@@ -602,3 +488,7 @@ class Lidar():
                                         angular_pos=angular_pos)
 
         return result
+    
+    def disconnect(self):
+        self.lidar.stop()
+        self.lidar.disconnect()

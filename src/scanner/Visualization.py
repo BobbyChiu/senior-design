@@ -1,12 +1,7 @@
-import PyQt5
 import pyqtgraph as pg
-import pyqtgraph.opengl
-from PyQt5.QtWidgets import QApplication, QMainWindow, QVBoxLayout, QWidget, QLabel, QGridLayout
-from PyQt5.QtGui import QImage, QPixmap, QVector3D
-from PyQt5.QtWebEngineWidgets import QWebEngineView
-import plotly.io as pio
-from PyQt5.QtCore import pyqtSignal, QTimer, QObject, Qt
-import sys
+from PyQt5.QtWidgets import QMainWindow, QInputDialog
+from PyQt5.QtGui import QVector3D
+from PyQt5.QtCore import pyqtSignal
 import plotly
 import plotly.graph_objs as go
 import open3d as o3d
@@ -15,9 +10,10 @@ from pyqtgraph.Qt import QtCore, QtWidgets
 import pyqtgraph.opengl as gl
 import vtk
 from vtk.qt.QVTKRenderWindowInteractor import QVTKRenderWindowInteractor
+import time
 vtk.vtkObject.GlobalWarningDisplayOff()
-plotter = None
 
+plotter = None
 def open3d_mesh_to_vtk_polydata(open3d_mesh):
     # Convert Open3D mesh to VTK polydata
 
@@ -112,9 +108,14 @@ def showMesh(mesh):
     else:
         o3d.visualization.draw_geometries([mesh], mesh_show_wireframe=True, mesh_show_back_face=True)
 
-class RealTimePlotWindow(QMainWindow):
+# To fix the issue of the plot not updating, we need to create a custom GLViewWidget
+class CustomGLViewWidget(gl.GLViewWidget):
+    def mousePressEvent(self, event):
+        super().mousePressEvent(event)
+        self.setFocus()
 
-    update_plot_signal = pyqtSignal(int, np.ndarray)
+class RealTimePlotWindow(QMainWindow):
+    input_signal = pyqtSignal()
 
     def __init__(self, buffers1, buffers2, colors):
         super().__init__()
@@ -130,7 +131,25 @@ class RealTimePlotWindow(QMainWindow):
         self.pc2 = np.empty((0,3))
         self.mesh = None
         self.need_update_mesh = False
+        self.input_signal.connect(self._get_input)
         self.initUI()
+
+    def get_input(self):
+        self.input_value = None
+        self.input_signal.emit()
+
+        while self.input_value is None:
+            time.sleep(0.1)
+
+        return self.input_value
+            
+    def _get_input(self):
+        value, ok = QInputDialog.getInt(self, "Input Dialog", "Enter a value:")
+        if ok:
+            # Emit the inputted value
+            self.input_value = value
+        else:
+            self.input_value = "No value entered"
 
     def initUI(self):
         self.setWindowTitle('Real-time Plots and Mesh Visualization')
@@ -149,6 +168,10 @@ class RealTimePlotWindow(QMainWindow):
 
         # Setup the VTK widget for 3D visualization
         self.vtkWidget = QVTKRenderWindowInteractor(central_widget)
+
+        # Make sure VTK widget releases focus when unselected
+        self.vtkWidget.mouseReleaseEvent = self.on_vtkWidget_mouseRelease
+
         layout.addWidget(self.vtkWidget, 1, 0)
 
         # Setup VTK renderer
@@ -157,7 +180,7 @@ class RealTimePlotWindow(QMainWindow):
         self.renderer.SetBackground(61/255, 54/255, 53/255)
 
         # First 3D scatter plot
-        self.view3d_1 = gl.GLViewWidget()
+        self.view3d_1 = CustomGLViewWidget()
         self.view3d_1.setBackgroundColor((61, 54, 53))  # Dark background
 
         # set camera
@@ -177,7 +200,7 @@ class RealTimePlotWindow(QMainWindow):
         layout.addWidget(self.view3d_1, 0, 1)
 
         # Second 3D scatter plot
-        self.view3d_2 = gl.GLViewWidget()
+        self.view3d_2 = CustomGLViewWidget()
         self.view3d_2.setBackgroundColor((61, 54, 53))  # Dark background
         self.scatter3d_2_1 = gl.GLScatterPlotItem()
         self.view3d_2.addItem(self.scatter3d_2_1)
@@ -195,6 +218,13 @@ class RealTimePlotWindow(QMainWindow):
         self.timer = QtCore.QTimer()
         self.timer.timeout.connect(self.update_plots)
         self.timer.start(50)  # Update interval in milliseconds
+
+    def on_vtkWidget_mouseRelease(self, event):
+        # Call the original mouseReleaseEvent function
+        QVTKRenderWindowInteractor.mouseReleaseEvent(self.vtkWidget, event)
+
+        # Fixes strange bug where the 3D plots lose focus until the user clicks on the 2d plot
+        self.plot2d.setFocus()
 
     def update_plots(self):
         """ Update the plots with new data"""
