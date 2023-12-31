@@ -1,1 +1,1 @@
-message("Test from gui subdirectory")
+add_subdirectory("gui-interface")

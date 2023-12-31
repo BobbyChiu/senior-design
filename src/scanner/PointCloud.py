@@ -480,7 +480,6 @@ def to_mesh(points_3d, voxel_size=0.1):
         o3d.utility.VerbosityLevel.Debug) as cm:
         mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
             downpcd, depth=9)
-
     mesh.compute_vertex_normals()
     mesh.paint_uniform_color([1, 0.706, 0])
     return mesh
