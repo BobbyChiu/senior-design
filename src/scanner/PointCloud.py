@@ -25,6 +25,8 @@ def cylindrical2cart(r, theta, z):
     return (x, y, z)
 
 def from_file(path):
+    pc = np.loadtxt(path)
+    pc = pc.reshape(-1, 3)
     return np.loadtxt(path)
 
 def to_file(pc, *, folder=None, filename=None):
@@ -126,9 +128,45 @@ def create_rotation_matrix(angles):
     R = np.dot(Rz, np.dot(Ry, Rx))
     return R
 
+def remove_statistical_outliers(points, nb_neighbors=20, std_ratio=2.0):
+    """
+    Remove statistical outliers from a point cloud using open3d.geometry.statistical_outlier_removal.
+
+    Parameters:
+    - points: numpy array of shape (N, 3) representing N 3D points
+    - nb_neighbors: number of neighbors to use for radius search
+    - std_ratio: standard deviation ratio
+
+    Returns:
+    - inliers: numpy array of shape (M, 3) containing the filtered point cloud 
+      and a numpy array of shape (N,) containing the indices of the outliers
+    """
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    _, ind = pcd.remove_statistical_outlier(nb_neighbors, std_ratio)
+    return np.asarray(pcd.select_by_index(ind).points), ind
+
+def remove_radius_outliers(points, nb_points=24, radius=0.05):
+    """
+    Remove radius outliers from a point cloud using open3d.geometry.radius_outlier_removal.
+
+    Parameters:
+    - points: numpy array of shape (N, 3) representing N 3D points
+    - nb_points: minimum number of points within the radius
+    - radius: radius of the sphere
+
+    Returns:
+    - inliers: numpy array of shape (M, 3) containing the filtered point cloud 
+        and a numpy array of shape (N,) containing the indices of the outliers
+    """
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(points)
+    _, ind = pcd.remove_radius_outlier(nb_points, radius)
+    return np.asarray(pcd.select_by_index(ind).points), ind
+
 def apply_transformation(array, points):
     """
-    Apply the transformation defined by the array to the given points.
+    Apply the transformation defined by the array to the given points, optimized using NumPy.
 
     :param array: A list or tuple of six values, where the first three are shifts and the last three are rotation angles.
     :param points: A list of points (each a tuple or list of three values) to transform.
@@ -140,16 +178,15 @@ def apply_transformation(array, points):
     R = create_rotation_matrix(angles)
     transformation_matrix = np.dot(T, R)
 
-    transformed_points = []
-    for point in points:
-        # Convert point to homogeneous coordinates
-        point_homogeneous = np.array([point[0], point[1], point[2], 1])
-        # Apply transformation
-        transformed_point = np.dot(transformation_matrix, point_homogeneous)
-        # Convert back to 3D coordinates and add to the list
-        transformed_points.append(transformed_point[:3])
+    # Convert points to a NumPy array and add a row of 1s for homogeneous coordinates
+    points_array = np.array(points)
+    points_homogeneous = np.hstack((points_array, np.ones((points_array.shape[0], 1))))
 
-    return transformed_points
+    # Apply transformation to all points at once
+    transformed_points = np.dot(points_homogeneous, transformation_matrix.T)
+
+    # Drop the homogeneous coordinate and return
+    return transformed_points[:, :3]
 
 def subtract_point_clouds(cloud1, cloud2, threshold):
     """
@@ -375,201 +412,32 @@ def add_bottom_surface(pc, z_percentile=1, percent_height=1, grid_spacing=0.1, e
 
     return new_pc
 
-
-def icp(source, target):
-    source_pcd = o3d.geometry.PointCloud()
-    target_pcd = o3d.geometry.PointCloud()
-    source_pcd.points = o3d.utility.Vector3dVector(source)
-    target_pcd.points = o3d.utility.Vector3dVector(target)
-
-    icp_result = o3d.pipelines.registration.registration_icp(
-        source_pcd, target_pcd, 1.0, np.identity(4),
-        o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=50))
-
-    # Transform the source point cloud using the found transformation matrix
-    source_pcd_transformed = source_pcd.transform(icp_result.transformation)
-
-    return np.asarray(source_pcd_transformed.points)
-
-def feature_based_registration(source, target):
-    # Convert input point clouds to Open3D PointCloud objects
-    source_pcd = o3d.geometry.PointCloud()
-    target_pcd = o3d.geometry.PointCloud()
-    source_pcd.points = o3d.utility.Vector3dVector(source)
-    target_pcd.points = o3d.utility.Vector3dVector(target)
-
-    # Compute normals for source and target point clouds
-    source_pcd.estimate_normals()
-    target_pcd.estimate_normals()
-
-    # Fast Global Registration (ICP)
-    icp_coarse = o3d.pipelines.registration.registration_icp(
-        source_pcd, target_pcd, 0.1, np.identity(4),
-        o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=50))
-
-    icp_fine = o3d.pipelines.registration.registration_icp(
-        source_pcd, target_pcd, 0.05, icp_coarse.transformation,
-        o3d.pipelines.registration.TransformationEstimationPointToPoint(),
-        o3d.pipelines.registration.ICPConvergenceCriteria(max_iteration=50))
-
-    # Transform the source point cloud using the found transformation matrix
-    source_pcd_transformed = source_pcd.transform(icp_fine.transformation)
-
-    return np.asarray(source_pcd_transformed.points)
-
-from scipy.stats import wasserstein_distance
-
-def compute_normals_with_open3d(point_cloud):
+def chamfer_distance(point_cloud_a, point_cloud_b):
     """
-    Compute normals for a point cloud using Open3D.
+    Calculate the Chamfer Distance between two point clouds.
 
     Parameters:
-    point_cloud (o3d.geometry.PointCloud): Open3D point cloud object.
+    point_cloud_a (numpy.ndarray): First point cloud as an Nx3 numpy array.
+    point_cloud_b (numpy.ndarray): Second point cloud as an Nx3 numpy array.
 
     Returns:
-    o3d.geometry.PointCloud: Point cloud with normals.
+    float: The Chamfer Distance between the two point clouds.
     """
-    # Estimate normals
-    point_cloud.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
-    return point_cloud
+    # Build a KDTree for point_cloud_b
+    tree = cKDTree(point_cloud_b)
 
-def cosine_similarity(normals1, normals2):
-    """
-    Calculate cosine similarity between two sets of normals.
+    # Find the nearest neighbor in point_cloud_b for each point in point_cloud_a
+    distances_a_to_b, _ = tree.query(point_cloud_a)
 
-    Parameters:
-    normals1, normals2 (numpy.ndarray): Arrays of normals.
+    # Build a KDTree for point_cloud_a
+    tree = cKDTree(point_cloud_a)
 
-    Returns:
-    float: Average cosine similarity.
-    """
-    # Normalize the normals
-    normals1_normalized = normals1 / np.linalg.norm(normals1, axis=1, keepdims=True)
-    normals2_normalized = normals2 / np.linalg.norm(normals2, axis=1, keepdims=True)
+    # Find the nearest neighbor in point_cloud_a for each point in point_cloud_b
+    distances_b_to_a, _ = tree.query(point_cloud_b)
 
-    # Calculate cosine similarity
-    similarity = np.sum(normals1_normalized * normals2_normalized, axis=1)
-    return np.mean(similarity)
-
-def feature_based_similarity(cloud1, cloud2):
-    """
-    Calculate feature-based similarity between two point clouds based on normals.
-
-    Parameters:
-    cloud1, cloud2 (numpy.ndarray): Nx3 numpy arrays representing point clouds.
-
-    Returns:
-    float: Cosine similarity of normals between the two point clouds.
-    """
-    # Convert numpy arrays to Open3D PointCloud
-    pcd1 = o3d.geometry.PointCloud()
-    pcd1.points = o3d.utility.Vector3dVector(cloud1)
-    pcd2 = o3d.geometry.PointCloud()
-    pcd2.points = o3d.utility.Vector3dVector(cloud2)
-
-    # Compute normals
-    pcd1 = compute_normals_with_open3d(pcd1)
-    pcd2 = compute_normals_with_open3d(pcd2)
-
-    # Extract normals
-    normals1 = np.asarray(pcd1.normals)
-    normals2 = np.asarray(pcd2.normals)
-
-    # Calculate similarity
-    similarity = cosine_similarity(normals1, normals2)
-    return similarity
-
-def calculate_overlap_distance(subset, larger_set, threshold):
-    """
-    Optimized calculation of the average distance between overlapping points in a subset and a larger point cloud set.
-
-    Parameters:
-    subset (numpy.ndarray): Subset point cloud as an Nx3 numpy array.
-    larger_set (numpy.ndarray): Larger point cloud set as an Mx3 numpy array.
-    threshold (float): Distance threshold for considering points as overlapping.
-
-    Returns:
-    float: Average distance between overlapping points in the subset and the larger set.
-    """
-    # Create a k-d tree for the larger set
-    tree = cKDTree(larger_set)
-
-    # Find the nearest neighbor in the larger set for each point in the subset
-    distances, _ = tree.query(subset, distance_upper_bound=threshold)
-
-    # Filter out distances that are infinity (which means no neighbors within the threshold)
-    valid_distances = distances[distances != np.inf]
-
-    # Compute average distance if there are overlapping points
-    average_distance = np.mean(valid_distances) if len(valid_distances) > 0 else 0
-    return average_distance
-def hausdorff_distance(cloud1, cloud2):
-    """
-    Calculate the Hausdorff Distance between two point clouds.
-
-    Parameters:
-    cloud1, cloud2 (numpy.ndarray): Nx3 numpy arrays representing point clouds.
-
-    Returns:
-    float: The Hausdorff Distance between the two point clouds.
-    """
-    def one_sided_hausdorff(cloudA, cloudB):
-        max_distance = 0
-        for point in cloudA:
-            # Compute distances from this point to all points in cloudB
-            distances = np.sqrt(np.sum((cloudB - point) ** 2, axis=1))
-            # Find the minimum distance to cloudB for this point
-            min_distance = np.min(distances)
-            # Update max_distance if this point has a larger distance
-            max_distance = max(max_distance, min_distance)
-        return max_distance
-
-    # Calculate one-sided Hausdorff distances and return the maximum
-    hausdorff_A_to_B = one_sided_hausdorff(cloud1, cloud2)
-    hausdorff_B_to_A = one_sided_hausdorff(cloud2, cloud1)
-    return hausdorff_A_to_B
-
-def earth_movers_distance(cloud1, cloud2):
-    """
-    Calculate the Earth Mover's Distance (EMD) between two point clouds.
-
-    Parameters:
-    cloud1 (numpy.ndarray): First point cloud as an Nx3 numpy array.
-    cloud2 (numpy.ndarray): Second point cloud as an Nx3 numpy array.
-
-    Returns:
-    float: The Earth Mover's Distance between the two point clouds.
-    """
-    # Compute EMD for each dimension (x, y, z)
-    emd_x = wasserstein_distance(cloud1[:, 0], cloud2[:, 0])
-    emd_y = wasserstein_distance(cloud1[:, 1], cloud2[:, 1])
-    emd_z = wasserstein_distance(cloud1[:, 2], cloud2[:, 2])
-
-    # Combine the EMD from each dimension
-    emd_total = (emd_x + emd_y + emd_z) / 3
-    return emd_total
-
-
-def chamfer_distance(point_cloud_a, point_cloud_b, only_a_to_b=False):
-    # Create KD-Trees
-    tree_a = cKDTree(point_cloud_a)
-    tree_b = cKDTree(point_cloud_b)
-
-    # Find the closest points and distances from A to B
-    distances_a_to_b, _ = tree_a.query(point_cloud_b)
-    distances_b_to_a, _ = tree_b.query(point_cloud_a)
-
-
-    # Compute the Chamfer Distance
-    chamfer_a_to_b = np.mean((distances_a_to_b)) ** 2
-    chamfer_b_to_a = np.mean((distances_b_to_a)) ** 2
-
-    if only_a_to_b:
-        return chamfer_a_to_b
-    else:
-        return chamfer_a_to_b + chamfer_b_to_a
+    # Combine the distances from a to b and b to a
+    chamfer_distance = np.sqrt(np.mean(distances_a_to_b**2)) + np.sqrt(np.mean(distances_b_to_a**2)) + np.std(distances_a_to_b) + np.std(distances_b_to_a)
+    return chamfer_distance
 
 def get_surface_points(input_cloud, voxel_size=0.1):
     pcd = o3d.geometry.PointCloud()
@@ -601,18 +469,17 @@ def to_mesh(points_3d, voxel_size=0.1):
 
     pcd.normals = o3d.utility.Vector3dVector(np.zeros(
     (1, 3)))  # invalidate existing normals
-
-    pcd.estimate_normals()
-    pcd.orient_normals_consistent_tangent_plane(100)
-
+    
     # Downsample the point cloud
     downpcd = pcd.voxel_down_sample(voxel_size=voxel_size)
+
+    downpcd.estimate_normals()
+    downpcd.orient_normals_consistent_tangent_plane(20)
 
     with o3d.utility.VerbosityContextManager(
         o3d.utility.VerbosityLevel.Debug) as cm:
         mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
             downpcd, depth=9)
-    
     mesh.compute_vertex_normals()
     mesh.paint_uniform_color([1, 0.706, 0])
     return mesh
@@ -624,6 +491,8 @@ def mesh_to_stl(mesh, *, folder=None, filename=None):
 
 def stl_to_mesh(filename):
     mesh = o3d.io.read_triangle_mesh(filename)
+    mesh.compute_vertex_normals()
+    mesh.paint_uniform_color([1, 0.706, 0])
     return mesh
 
 def mesh_to_pc(mesh, num_samples=100000):

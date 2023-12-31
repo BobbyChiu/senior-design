@@ -1,3 +1,29 @@
+'''
+Adapted from https://github.com/Roboticia/RPLidar
+
+The MIT License (MIT)
+
+Copyright (c) 2016 Artyom Pavlov
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+'''
+
 '''Simple and lightweight module for working with RPLidar rangefinder scanners.
 
 Usage example:
@@ -50,7 +76,7 @@ DESCRIPTOR_LEN = 7
 INFO_LEN = 20
 HEALTH_LEN = 3
 
-MAX_RETRIES = 10
+MAX_RETRIES = 40
 
 INFO_TYPE = 4
 HEALTH_TYPE = 6
@@ -66,10 +92,29 @@ _HEALTH_STATUSES = {
     2: 'Error',
 }
 
+def retry(func):
+    def wrapper(*args, **kwargs):
+        max_retries = MAX_RETRIES
+        for i in range(max_retries):
+            try:
+                return func(*args, **kwargs)
+            except Exception as e:
+                if i == max_retries - 1:
+                    raise e
+                else:
+                    logging.warning(f"Retrying {func.__name__} ({i+1}/{max_retries})")
+                    args[0].reset()
+                    time.sleep(0.1)
+    return wrapper
 
 class RPLidarException(Exception):
     '''Basic exception class for RPLidar'''
 
+    def reset(self):
+        '''Resets the lidar to its initial state'''
+        self.stop()
+        self.disconnect()
+        self.connect()
 
 def _b2i(byte):
     '''Converts byte to integer (for Python 2 compatability)'''
@@ -108,7 +153,7 @@ def _process_express_scan(data, new_angle, trame):
 class RPLidar(object):
     '''Class for communicating with RPLidar rangefinder scanners'''
 
-    def __init__(self, port, baudrate=115000, timeout=1, logger=None):
+    def __init__(self, port, baudrate=115200, timeout=1, logger=None):
         '''Initilize RPLidar object for communicating with the sensor.
 
         Parameters
@@ -135,6 +180,7 @@ class RPLidar(object):
             logger = logging.getLogger('rplidar')
         self.logger = logger
         self.connect()
+        self.start_motor()
 
     def connect(self):
         '''Connects to the serial port with the name `self.port`. If it was
@@ -144,7 +190,7 @@ class RPLidar(object):
         try:
             self._serial = serial.Serial(
                 self.port, self.baudrate,
-                parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, timeout=self.timeout)
+                parity=serial.PARITY_NONE, stopbits=serial.STOPBITS_ONE, timeout=self.timeout, dsrdtr=False, rtscts=False)
         except serial.SerialException as err:
             raise RPLidarException('Failed to connect to the sensor '
                                    'due to: %s' % err)
@@ -177,17 +223,17 @@ class RPLidar(object):
         self._serial.setDTR(False)
 
         # For A2
-        self._set_pwm(self._motor_speed)
-        self.motor_running = True
+        # self._set_pwm(self._motor_speed)
+        # self.motor_running = True
 
     def stop_motor(self):
         '''Stops sensor motor'''
         self.logger.info('Stoping motor')
-        # For A2
-        self._set_pwm(0)
-        time.sleep(.001)
+        # # For A2
+        # self._set_pwm(0)
+        # time.sleep(.001)
         # For A1
-        self._serial.setDTR(True)
+        # self._serial.setDTR(True)
         self.motor_running = False
 
     def _send_payload_cmd(self, cmd, payload):
@@ -227,6 +273,7 @@ class RPLidar(object):
         self.logger.debug('Received data: %s', _showhex(data))
         return data
 
+    @retry
     def get_info(self):
         '''Get device information
 
@@ -238,14 +285,8 @@ class RPLidar(object):
         if self._serial.inWaiting() > 0:
             return ('Data in buffer, you can\'t have info ! '
                     'Run clean_input() to emptied the buffer.')
-        for i in range(MAX_RETRIES):
-            try:
-                self._send_cmd(GET_INFO_BYTE)
-                dsize, is_single, dtype = self._read_descriptor()
-                break
-            except RPLidarException as e:
-                # self.clean_input()
-                print(str(e) + ". Retrying...")
+        self._send_cmd(GET_INFO_BYTE)
+        dsize, is_single, dtype = self._read_descriptor()
         if dsize != INFO_LEN:
             raise RPLidarException('Wrong get_info reply length')
         if not is_single:
@@ -263,6 +304,7 @@ class RPLidar(object):
         }
         return data
 
+    @retry
     def get_health(self):
         '''Get device health state. When the core system detects some
         potential risk that may cause hardware failure in the future,
@@ -282,14 +324,8 @@ class RPLidar(object):
             return ('Data in buffer, you can\'t have info ! '
                     'Run clean_input() to emptied the buffer.')
         self.logger.info('Asking for health')
-        for i in range(MAX_RETRIES):
-            try:
-                self._send_cmd(GET_HEALTH_BYTE)
-                dsize, is_single, dtype = self._read_descriptor()
-                break
-            except RPLidarException as e:
-                # self.clean_input()
-                print(str(e) + ". Retrying...")
+        self._send_cmd(GET_HEALTH_BYTE)
+        dsize, is_single, dtype = self._read_descriptor()
         if dsize != HEALTH_LEN:
             raise RPLidarException('Wrong get_info reply length')
         if not is_single:
@@ -329,41 +365,40 @@ class RPLidar(object):
             return 'Scanning already running !'
         '''Start the scanning process, enable laser diode and the
         measurement system'''
-        status, error_code = self.get_health()
-        self.logger.debug('Health status: %s [%d]', status, error_code)
-        if status == _HEALTH_STATUSES[2]:
-            self.logger.warning('Trying to reset sensor due to the error. '
-                                'Error code: %d', error_code)
-            self.reset()
-            status, error_code = self.get_health()
-            if status == _HEALTH_STATUSES[2]:
-                raise RPLidarException('RPLidar hardware failure. '
-                                       'Error code: %d' % error_code)
-        elif status == _HEALTH_STATUSES[1]:
-            self.logger.warning('Warning sensor status detected! '
-                                'Error code: %d', error_code)
+        # status, error_code = self.get_health()
+        # self.logger.debug('Health status: %s [%d]', status, error_code)
+        # if status == _HEALTH_STATUSES[2]:
+        #     self.logger.warning('Trying to reset sensor due to the error. '
+        #                         'Error code: %d', error_code)
+        #     self.reset()
+        #     status, error_code = self.get_health()
+        #     if status == _HEALTH_STATUSES[2]:
+        #         raise RPLidarException('RPLidar hardware failure. '
+        #                                'Error code: %d' % error_code)
+        # elif status == _HEALTH_STATUSES[1]:
+        #     self.logger.warning('Warning sensor status detected! '
+        #                         'Error code: %d', error_code)
 
-        cmd = _SCAN_TYPE[scan_type]['byte']
-        self.logger.info('starting scan process in %s mode' % scan_type)
+        @retry
+        def get_descriptor(lidar):
+            cmd = _SCAN_TYPE[scan_type]['byte']
+            self.logger.info('starting scan process in %s mode' % scan_type)
+            if scan_type == 'express':
+                self._send_payload_cmd(cmd, b'\x00\x00\x00\x00\x00')
+            else:
+                self._send_cmd(cmd)
+            dsize, is_single, dtype = self._read_descriptor()  
 
-        for i in range(MAX_RETRIES):
-            try:
-                if scan_type == 'express':
-                    self._send_payload_cmd(cmd, b'\x00\x00\x00\x00\x00')
-                else:
-                    self._send_cmd(cmd)
-                dsize, is_single, dtype = self._read_descriptor()    
-                break
-            except RPLidarException as e:
-                # self.clean_input()
-                print(str(e) + ". Retrying...")
+            if dsize != _SCAN_TYPE[scan_type]['size']:
+                raise RPLidarException('Wrong get_info reply length')
+            if is_single:
+                raise RPLidarException('Not a multiple response mode')
+            if dtype != _SCAN_TYPE[scan_type]['response']:
+                raise RPLidarException('Wrong response data type')  
+            
+            return dsize, is_single, dtype
 
-        if dsize != _SCAN_TYPE[scan_type]['size']:
-            raise RPLidarException('Wrong get_info reply length')
-        if is_single:
-            raise RPLidarException('Not a multiple response mode')
-        if dtype != _SCAN_TYPE[scan_type]['response']:
-            raise RPLidarException('Wrong response data type')
+        dsize,_,_ = get_descriptor(self)
         self.scanning = [True, dsize, scan_type]
 
     def reset(self):
@@ -418,7 +453,7 @@ class RPLidar(object):
             if self.scanning[2] == 'express':
                 if self.express_trame == 32:
                     self.express_trame = 0
-                    if not self.express_data:
+                    if not self.express_data or type(self.express_data) == bool :
                         self.logger.debug('reading first time bytes')
                         self.express_data = ExpressPacket.from_string(
                                             self._read_response(dsize))
@@ -436,6 +471,7 @@ class RPLidar(object):
                                   '%f and angle new : %f', self.express_trame,
                                   self.express_old_data.start_angle,
                                   self.express_data.start_angle)
+                
                 yield _process_express_scan(self.express_old_data,
                                             self.express_data.start_angle,
                                             self.express_trame)

@@ -1,6 +1,6 @@
 import PointCloud
-from Lidar import Lidar, estimate_angular_speed, lidar2d_to_3d, calibrate_lidars, start_stop_scan, calibrate, calibrate_no_ref
-from Visualization import plot3d, showMesh, plot2d_realtime, plot_dual_3d_clouds
+from Lidar import Lidar, estimate_angular_speed, lidar2d_to_3d, calibrate_lidars, start_stop_scan, calibrate, calibrate_no_ref, auto_get_lidars
+from Visualization import plot3d, showMesh, plot_dual_3d_clouds
 import ArgSource
 import time
 import argparse
@@ -32,7 +32,7 @@ def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params
     #                                             sigma_n=0.1) 
 
 
-    pc = PointCloud.get_surface_points(pc, voxel_size=0.5)
+    pc = PointCloud.get_surface_points(pc, voxel_size=0.2)
                                                 
     # open3d outlier remover
     pcd = o3d.geometry.PointCloud()
@@ -41,7 +41,7 @@ def post_processing(pc, knn=None, rad_out_rem_params=(10,5), stat_out_rem_params
     cl, ind = pcd.remove_statistical_outlier(nb_neighbors=stat_out_rem_params[0], 
                                              std_ratio=stat_out_rem_params[1])
     pcd = pcd.select_by_index(ind)
-    # # radius outlier removal
+    # radius outlier removal
     # cl, ind = pcd.remove_radius_outlier(nb_points=rad_out_rem_params[0],
     #                                     radius=rad_out_rem_params[1])
     # pcd = pcd.select_by_index(ind)
@@ -112,27 +112,54 @@ def self_aligned_scan(top, bottom):
 
 ############### viz
 
-top_cal = PointCloud.from_file("calibration/top_cal.xyz")
-bot_cal = PointCloud.from_file("calibration/bottom_cal.xyz")
-plot_dual_3d_clouds(top_cal, bot_cal, 'red', 'blue')
+# top_cal = PointCloud.from_file("calibration/top_cal.xyz")
+# bot_cal = PointCloud.from_file("calibration/bottom_cal.xyz")
+# plot_dual_3d_clouds(top_cal, bot_cal, 'red', 'blue')
 
-sandia_pre = PointCloud.from_file("lidar-data-xyz/sandia_voxel_pre.xyz")
-plot3d(sandia_pre)
+# sandia_pre = PointCloud.from_file("lidar-data-xyz/sandia_voxel_pre.xyz")
+# plot3d(sandia_pre)
 
-sandia_post = PointCloud.from_file("lidar-data-xyz/sandia_voxel.xyz")
-plot3d(sandia_post)
+# sandia_post = PointCloud.from_file("lidar-data-xyz/sandia_voxel.xyz")
+# plot3d(sandia_post)
 
-mesh = PointCloud.to_mesh(sandia_post)
-showMesh(mesh)
+# mesh = PointCloud.to_mesh(sandia_post)
+# showMesh(mesh)
 
-cube_pre = PointCloud.from_file("lidar-data-xyz/cube_voxel_pre.xyz")
-plot3d(cube_pre)
+# mesh = PointCloud.to_mesh(sandia_post)
+# showMesh(mesh)
+# PointCloud.mesh_to_stl(mesh, folder="stl", filename="ultimate_sandia.stl")
 
-cube_post = PointCloud.from_file("lidar-data-xyz/cube_voxel.xyz")
-plot3d(cube_post)
+# sandia_post = PointCloud.from_file("lidar-data-xyz/express_sandia.xyz")
+# plot3d(sandia_post)
 
-mesh = PointCloud.to_mesh(cube_post)
-showMesh(mesh)
+# mesh = PointCloud.to_mesh(sandia_post)
+# showMesh(mesh)
+
+# cube_pre = PointCloud.from_file("lidar-data-xyz/cube_voxel_pre.xyz")
+# plot3d(cube_pre)
+
+# cube_post = PointCloud.from_file("lidar-data-xyz/cube_voxel.xyz")
+# plot3d(cube_post)
+
+# mesh = PointCloud.stl_to_mesh('stl/first_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/best_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/wide_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/penultimate_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.stl_to_mesh('stl/final_sandia.stl')
+# showMesh(mesh)
+
+# mesh = PointCloud.to_mesh(cube_post)
+# showMesh(mesh)
+
+
 
 
 # bottom = PointCloud.from_file("calibration/ref-duck-bottom.xyz")
@@ -159,6 +186,9 @@ showMesh(mesh)
 # lidar_bottom.remove_background_on_current()
 # lidar_top.remove_background_on_current()
 
+# pc_top = lidar_top.get3DPointCloud()
+# pc_bottom = lidar_bottom.get3DPointCloud()
+# plot_dual_3d_clouds(pc_top, pc_bottom, 'red', 'blue')
 
 
 # #  calibrate
@@ -177,6 +207,64 @@ showMesh(mesh)
 # print(f"Optimal Scanning Params: {optimal_params}")
 # plot_dual_3d_clouds(top_calibration_cloud, bottom_calibration_cloud, 'red', 'blue')
 
+######################## calibrate test
+
+# top_back = PointCloud.from_file('calibration/top_background.xyz')
+# bottom_back = PointCloud.from_file('calibration/bottom_background.xyz')
+# top = PointCloud.from_file('calibration/ref-duck-top.xyz')
+# bottom = PointCloud.from_file('calibration/ref-duck-bottom.xyz')
+
+# lidar_top, lidar_bottom = auto_get_lidars((10, 50), (-40, 0),
+#                                             (10, 50), (-15, 45))
+
+# lidar_top.curr_scan = top_back
+# lidar_bottom.curr_scan = bottom_back
+
+# dist_from_axis, turntable_height = lidar_bottom.set_current_to_background(estimate_params=True)
+# lidar_top.set_current_to_background(estimate_params=False)
+# lidar_top.set_background_params(dist_from_axis, turntable_height - LIDAR_VERTICAL_SEPARATION)
+
+# lidar_top.curr_scan = top
+# lidar_bottom.curr_scan = bottom
+
+# lidar_top.remove_background_on_current(use_calib_params=False)
+# lidar_bottom.remove_background_on_current(use_calib_params=False)
+
+
+# # calibrate
+# calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
+# calibration_duck = PointCloud.mesh_to_pc(calibration_duck, 10000) / 10
+# # plot3d(calibration_duck)
+# initial_guess = [lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION, # lidar top pos
+#                  lidar_bottom.dist_from_axis, 0, 0,
+#                 0, 0, 0,  # lidar top angle
+#                 0, 0, 0]  # lidar bottom angle
+
+# # pc = lidar_top.get3DPointCloud(pos=(lidar_top.dist_from_axis, 0, LIDAR_VERTICAL_SEPARATION), angular_pos=(0, 7, 0))
+# # plot3d(pc)
+
+# optimal_params, top_calibration_cloud, bottom_calibration_cloud = calibrate(lidar_top, lidar_bottom, initial_guess, calibration_duck) # make sure scans align
+# plot_dual_3d_clouds(top_calibration_cloud, bottom_calibration_cloud, 'red', 'blue')
+
+# # save calibration data
+# PointCloud.to_file(optimal_params, folder="calibration", filename="calibration.data")
+
+# pc_final = np.vstack((top_calibration_cloud, bottom_calibration_cloud))
+# pc_final = post_processing(pc_final)
+# PointCloud.to_file(pc_final, folder='lidar-data-xyz', filename='big-duck.xyz')
+# mesh = PointCloud.to_mesh(pc_final)
+# showMesh(mesh)
+
+################################## duck
+coke = PointCloud.from_file("lidar-data-xyz/20231204_010212.xyz")
+
+coke = post_processing(coke)
+
+normals = PointCloud.estimate_normals(coke, 0.5)
+duck = PointCloud.bilateral_filter_point_cloud(coke, normals, 0.5, 1, 0.01)
+mesh = PointCloud.to_mesh(coke)
+showMesh(mesh)
+PointCloud.mesh_to_stl(mesh, folder='stl', filename='coke.stl')
 
 # # calibrate
 # calibration_duck = PointCloud.stl_to_mesh('calibration/duck.stl')
