@@ -1,0 +1,8 @@
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/v2-gui-interface.dir
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/edit_cache.dir
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/rebuild_cache.dir
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/list_install_components.dir
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/install.dir
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/install/local.dir
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/install/strip.dir
+C:/Users/Bobby/Documents/senior-design/src/gui/cbuild/CMakeFiles/v2-gui-interface_autogen.dir
